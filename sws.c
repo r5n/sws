@@ -7,9 +7,41 @@
 #include <err.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 #define PORT 8080
+
+void http(int fd, struct sockaddr_in addr) {
+    (void)addr;
+    char *buf;
+    ssize_t rd, size, length;
+
+    size = BUFSIZ;
+    length = 0;
+    buf = calloc(size, 1);
+
+    while (true) {
+        if (strncmp(buf + length - 4, "\r\n\r\n", 4) == 0) {
+            break;
+        }
+
+        rd = read(fd, buf, size - length);
+        if (rd == size - length) {
+            size *= 2;
+            buf = realloc(buf, size);
+        } else if (rd == 0) {
+            printf("read 0\n");
+            break;
+        }
+        length += rd;
+    }
+
+    printf("received [%s]\n", buf);
+
+    free(buf);
+}
 
 int main() {
     struct sockaddr_in server, client;
@@ -53,6 +85,7 @@ int main() {
             case 0: // child
                 printf("got connection from %s\n",
                         inet_ntoa(client.sin_addr));
+                http(clientsock, client);
                 break;
 
             default: // parent
