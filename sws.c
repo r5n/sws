@@ -40,8 +40,10 @@ int main() {
     while (true) {
         clientsz = sizeof(client);
         clientsock = accept(serversock, (struct sockaddr *)&client, &clientsz);
-        if (clientsock < 0)
+        if (clientsock < 0) {
             perror("accept");
+            continue;
+        }
 
         switch (fork()) {
             case -1:
