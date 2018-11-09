@@ -12,6 +12,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "extern.h" 
 
 struct http_request {
 	enum {GET, HEAD, UNSUPPORTED} type;
@@ -146,7 +147,18 @@ char *sockaddr_to_str(struct sockaddr *addr, socklen_t addrlen) {
     return res;
 }
 
-int main() {
+void
+init_struct(struct server_info *server){
+    server->dir = NULL;
+    server->address = NULL;
+    server->logdir = NULL;
+    server->port = "8080";
+}
+    
+
+
+int 
+main(int argc,char **argv) {
     struct sockaddr_in6 client; // assuming sockaddr_in6 is bigger than sockaddr_in
     struct addrinfo hints, *res;
     int clientsock, set, status;
@@ -154,11 +166,16 @@ int main() {
     socklen_t clientsz;
     char *host, *port, *ipport;
     struct pollfd *fds;
-
-    host = NULL;
-    port = "8080";
+    struct server_info server_info;
+    struct options options;
+    
+    init_struct(&server_info);
+    parse_args(argc,argv,&options,&server_info);
+    
+    host = server_info.address;
+    port = server_info.port;
     nsocks = 0;
-
+    
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;

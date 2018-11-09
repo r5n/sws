@@ -14,6 +14,10 @@
 #include <sysexits.h>
 #include <unistd.h>
 
+#ifndef _EXTERN_H_
+#include "extern.h"
+#endif
+
 static void usage();
 void is_valid_ip(char *ipAddress);
 /*
@@ -21,18 +25,9 @@ void is_valid_ip(char *ipAddress);
  */
 int convert_to_int(char *port_string);
 
-
-struct options{
-    bool cgi; 
-    bool debug;
-    bool help;
-    bool bind_to;
-    bool log;
-    bool port;
-}options;
-
 int
-main(int argc, char **argv)
+parse_args(int argc, char **argv,struct options *options, \
+        struct server_info * server_info)
 { 
     int c;
     int port_num;
@@ -43,38 +38,42 @@ main(int argc, char **argv)
         switch(c)
         {
             case 'c':
-                options.cgi = true;
+                options->cgi = true;
                 if(!optarg)
                     usage();
                 cgi_dir = optarg;
                 printf("dir: %s\n",cgi_dir);
+                server_info->dir = cgi_dir;
                 break;
             case 'd':
-                options.debug = true;
+                options->debug = true;
                 break;
             case 'h':
-                options.help = true;
+                options->help = true;
                 usage();
                 break;
             case 'i':
-                options.bind_to = true;
+                options->bind_to = true;
                 host_name = optarg;
                 is_valid_ip(host_name);
                 printf("%s\n",host_name);
+                server_info->address = host_name;
                 break;
             case 'l':
-                options.log = true;
+                options->log = true;
+                server_info->logdir = optarg;
                 break;
             case 'p':
-                options.port = true;
+                options->port = true;
                 port_num = convert_to_int(optarg); 
                 printf("port: %d\n",port_num);
+                server_info->port = optarg;
                 break;
             default:
                 usage();
                 break;
         }
-    exit(EXIT_SUCCESS);
+    return 0;
 }
 
 
@@ -143,6 +142,4 @@ convert_to_int(char *port_string)
 static void
 usage(void){
     (void)fprintf(stderr,"usage: %s [-dh] [-c dir] [-i address] [-l file] [-p port] dir\n",getprogname()); 
-    if(!options.help)
-        exit(EX_USAGE);
 }
