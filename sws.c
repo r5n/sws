@@ -72,9 +72,10 @@ char *sockaddr_to_str(struct sockaddr *addr, socklen_t addrlen) {
 int main() {
     struct sockaddr_in6 client; // assuming sockaddr_in6 is bigger than sockaddr_in
     struct addrinfo hints, *res;
-    int clientsock, set, gaierr, nsocks, i;
+    int clientsock, set, status;
+    nfds_t nsocks, i;
     socklen_t clientsz;
-    char *host, *port;
+    char *host, *port, *ipport;
     struct pollfd *fds;
 
     host = NULL;
@@ -86,8 +87,8 @@ int main() {
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE | AI_NUMERICHOST | AI_NUMERICSERV;
 
-    if ((gaierr = getaddrinfo(host, port, &hints, &res)) != 0)
-        errx(1, "getaddrinfo([%s], [%s]): %s", host, port, gai_strerror(gaierr));
+    if ((status = getaddrinfo(host, port, &hints, &res)) != 0)
+        errx(1, "getaddrinfo([%s], [%s]): %s", host, port, gai_strerror(status));
 
     for (struct addrinfo *addr = res; addr; addr = addr->ai_next)
         ++nsocks;
@@ -118,7 +119,7 @@ int main() {
         if (listen(fds[i].fd, 5) < 0) // TODO find a good value
             err(1, "listen");
 
-        char *ipport = sockaddr_to_str(addr->ai_addr, addr->ai_addrlen);
+        ipport = sockaddr_to_str(addr->ai_addr, addr->ai_addrlen);
         printf("Listening on %s\n", ipport);
         free(ipport);
 
@@ -127,7 +128,7 @@ int main() {
 
     freeaddrinfo(res);
 
-    while (poll(fds, nsocks, 0) > 0) {
+    while ((status = poll(fds, nsocks, -1)) > 0) {
         for (i = 0; i < nsocks; ++i) {
             if (!fds[i].revents)
                 continue;
@@ -144,13 +145,12 @@ int main() {
                     err(1, "fork");
                     break;
 
-                case 0: { // child
-                    char *ipport = sockaddr_to_str((struct sockaddr *)&client, clientsz);
+                case 0: // child
+                    ipport = sockaddr_to_str((struct sockaddr *)&client, clientsz);
                     printf("got connection from %s\n", ipport);
                     free(ipport);
                     http(clientsock);
                     break;
-                }
 
                 default: // parent
                     printf("accepted\n");
@@ -158,4 +158,8 @@ int main() {
             }
         }
     }
+    if (status < 0)
+        err(1, "poll");
+
+    printf("Exiting\n");
 }
