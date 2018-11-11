@@ -5,3 +5,4 @@ OBJS = extern.h
 sws: args.o sws.c
 	$(CC) $(CFLAGS) args.c sws.c -o sws
 
+parse: parse.c

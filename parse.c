@@ -1,13 +1,21 @@
+#define _DEFAULT_SOURCE
+#define _XOPEN_SOURCE
+#include <ctype.h>
 #include <err.h>
-#include <linux/limits.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
+#include <time.h>
 #include <unistd.h>
 
-#define VERSION_MINLEN 8
+#define IF_MODIFIED "If-Modified-Since"
+#define IF_MODLEN   17
+#define RFC1123DATE "%a, %0d %b %Y %H:%M:%S GMT"
+#define RFC850DATE  "%A, %0d-%b-%y %H:%M:%S GMT"
+#define ASCTIMEDATE "%a %b%t%d %H:%M:%S %Y"
 
 struct http_request {
+	struct tm *time;
 	enum {GET, HEAD, UNSUPPORTED} type;
 	char *uri;
 	int if_modified;
@@ -20,93 +28,179 @@ invalidate_request(struct http_request *req)
 {
 	req->type = UNSUPPORTED;
 	req->uri = NULL;
-	req->if_modified = -1;
-	req->mjr = -1;
-	req->mnr = -1;
+	req->time = NULL;
+	req->if_modified = req->mjr = req->mnr = -1;
 }
 
-void
-parse_header(struct http_request *req, ssize_t urisz, char *buf, ssize_t bufsz)
+/* parse_request_type: read(2) upto 5 bytes from `fd`.  Check whether the
+ * request type is supported.  Assumes that the size of the buffer is more
+ * than 5 bytes.
+ */
+int
+parse_request_type(int fd, struct http_request *req,
+		   char *buf, size_t *len)
 {
-	size_t len;
-	char *invalid;
+	int rd;
 
-	if (bufsz == 0) {
-		invalidate_request(req);
-		return;
-	}
+	if ((rd = read(fd, buf, 4)) == -1)
+		err(1, "read");
+	*len = rd;
 
-	len = strcspn(buf, " ");
-	if ((strncmp(buf, "GET", len)) == 0)
+	if ((strncmp(buf, "GET ", 4)) == 0) {
 		req->type = GET;
-	else if ((strncmp(buf, "HEAD", len)) == 0)
+		return 0;
+	} else if ((strncmp(buf, "HEAD", 4)) == 0) {
 		req->type = HEAD;
-	else
-		req->type = UNSUPPORTED;
+		if ((rd = read(fd, buf + *len, 1)) == -1)
+			err(1, "read");
+		*len += 1;
+		return (*(buf + *len - 1) == ' ' ? 0 : -1);
+	}
+	return -1;
+}
 
-	buf += len + 1;
-	len = strcspn(buf, " ");
+/* parse_uri_version: parse information from first line of request and
+ * update `req`.
+ */
+int
+parse_uri_version(int fd, struct http_request *req, char *buf,
+		  size_t *len, size_t *size)
+{
+	size_t rd, spc;
+	char *savebuf, *invalid;
 
-	strncpy(req->uri, (const char *)buf, urisz);
-	req->uri[len] = '\0';
-
-	buf += len + 1;
-	len = strcspn(buf, "/");
-
-	if ((strncmp(buf, "HTTP", len)) != 0) {
-		invalidate_request(req);
-		return;
+	/* TODO: Read till CRLF not LF */
+	while (1) {
+		if ((strncmp(buf + *len - 1, "\n", 1)) == 0)
+			break;
+		if ((int)(rd = read(fd, buf + *len, *size - *len)) == -1)
+			err(1, "read");
+		if (rd == *size - *len) {
+			*size *= 2;
+			if ((buf = realloc(buf, *size)) == NULL)
+				err(1, "realloc");
+		} else if (rd == 0)
+			break;
+		*len += rd;
 	}
 
-	buf += len + 1;
-	len = strcspn(buf, "\r\n");
+	if ((savebuf = strsep(&buf, " ")) == NULL)
+		return -1;
 
-	if (len == 0) {
+	spc = strcspn(buf, " ");
+
+	(void)strncpy(req->uri, buf, spc);
+	*(req->uri + spc + 1) = '\0';
+
+	if (spc == strlen(buf)) { /* simple request */
 		req->mjr = 0;
 		req->mnr = 9;
-		return;
+		buf = savebuf;
+		return 0;
 	}
 	
-	len = strcspn(buf, ".");
+	if ((strsep(&buf, " ")) == NULL) {
+		buf = savebuf;
+		return -1;
+	}
+	
+	if ((strncmp(buf,"HTTP",4)) != 0) {
+		buf = savebuf;
+		return -1;
+	}
+
+	if ((strsep(&buf, "/")) == NULL) {
+		buf = savebuf;
+		return -1;
+	}
+
 	req->mjr = strtol(buf, &invalid, 10);
-
 	if (buf == invalid) {
-		invalidate_request(req);
-		return;
+		buf = savebuf;
+		return -1;
+	}
+
+	if ((strsep(&buf, ".")) == NULL) {
+		buf = savebuf;
+		return -1;
 	}
 	
-	buf += len + 1;
 	req->mnr = strtol(buf, &invalid, 10);
-
 	if (buf == invalid) {
-		invalidate_request(req);
-		return;
+		buf = savebuf;
+		return -1;
 	}
-
-	/* DEBUG */
-	if (req->type == GET) printf("GET");
-	if (req->type == HEAD) printf("HEAD");
-	if (req->type == UNSUPPORTED) printf("UNSUPPORTED");
-	printf("\turi: %s", req->uri);
-	printf("\tver: %d:%d\n", req->mjr, req->mnr);
+	
+	buf = savebuf;
+	return 0;
 }
 
+/* parse_headers: check for If-Modified-Since.  If not found, return 1;
+ * if found, return 0;  if found, and date is invalid, return -1;
+ */
 int
-main(void)
+parse_headers(struct http_request *req, char *buf)
 {
-	struct http_request req;
-	ssize_t rd, size, len;
+	size_t spc;
+	char *pnt, *chr;
+	
+	if ((strncmp(buf, IF_MODIFIED, IF_MODLEN)) != 0)
+		return 1;
+
+	req->if_modified = 1;
+
+	spc = strcspn(buf, ":");
+	spc += strspn(buf + spc + 1, " ");
+	pnt = buf + spc + 1;
+
+	if ((chr = strptime(pnt, RFC1123DATE, req->time)) != NULL)
+		return 0;
+	if ((chr = strptime(pnt, RFC850DATE, req->time)) != NULL)
+		return 0;
+	if ((chr = strptime(pnt, ASCTIMEDATE, req->time)) != NULL)
+		return 0;
+	
+	return -1;
+}
+
+/* parse_request: parse http request and store information in `req`.  `req`
+ * must be malloc'd by the caller.  It is assumed that `req.uri` contains
+ * enough enough memory to store the URI.  Returns -1 on error, 0 otherwise.
+ */
+int
+parse_request(int fd, struct http_request *req)
+{
+	size_t size, prev, len, rd;
 	char *buf;
 
 	size = BUFSIZ;
 	len = 0;
-	if ((buf = calloc(size, 1)) == NULL)
+
+	if ((buf = calloc(size, sizeof(char))) == NULL)
 		err(1, "calloc");
 
+	if ((parse_request_type(fd, req, buf, &len)) == -1) {
+		invalidate_request(req);
+		free(buf);
+		return -1;
+	}
+
+	if ((parse_uri_version(fd, req, buf, &len, &size)) == -1) {
+		invalidate_request(req);
+		free(buf);
+		return -1;
+	}
+	prev = len;
+	
+        /* parse request header fields */
 	while (1) {
-		if (strncmp(buf + len - 1, "\n", 1) == 0)
+		if (strncmp(buf + len - 2, "\n\n", 2) == 0)
 			break;
-		if ((rd = read(STDIN_FILENO, buf, size - len)) == -1)
+		if (strncmp(buf + len - 1, "\n", 1) == 0) {
+			parse_headers(req, buf + prev);
+			prev = len;
+		}
+		if ((int)(rd = read(fd, buf + len, size - len)) == -1)
 			err(1, "read");
 		if (rd == size - len) {
 			size *= 2;
@@ -114,17 +208,43 @@ main(void)
 				err(1, "realloc");
 		} else if (rd == 0)
 			break;
-		len += rd;			
+		len += rd;
 	}
 
-	if ((req.uri = malloc(sizeof(char *) * PATH_MAX)) == NULL) {
-		err(1, "malloc");
-	}
-
-	buf[++len] = '\0';
-	parse_header(&req, PATH_MAX, buf, len);
-
-	free(req.uri);
 	free(buf);
+	return 0;
+}
+
+int
+main(void)
+{
+	struct http_request req;
+
+	req.uri = malloc(sizeof(char *) * BUFSIZ);
+	req.time = malloc(sizeof(struct tm));
+	if ((parse_request(STDIN_FILENO,&req)) == -1)
+		printf("%s\n", "*invalid_request*");
+
+	switch (req.type) {
+	case GET:
+		printf("GET\t");
+		break;
+	case HEAD:
+		printf("HEAD\t");
+		break;
+	default:
+		printf("UNSUPPORTED\t");
+		break;
+	}
+	printf("%s\t", req.uri);
+	printf("%d.", req.mjr);
+	printf("%d\n", req.mnr);
+
+	if (!req.if_modified)
+		return 0;
+
+	printf("if-modified-since: %d %d %d\n",
+	       req.time->tm_wday, req.time->tm_mon, req.time->tm_year);
+	
 	return 0;
 }
