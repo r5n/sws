@@ -1,5 +1,3 @@
-#define _DEFAULT_SOURCE
-#define _XOPEN_SOURCE
 #include <ctype.h>
 #include <err.h>
 #include <stdio.h>
@@ -8,20 +6,13 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "parse.h"
+
 #define IF_MODIFIED "If-Modified-Since"
 #define IF_MODLEN   17
-#define RFC1123DATE "%a, %0d %b %Y %H:%M:%S GMT"
-#define RFC850DATE  "%A, %0d-%b-%y %H:%M:%S GMT"
+#define RFC1123DATE "%a, %d %b %Y %H:%M:%S GMT"
+#define RFC850DATE  "%A, %d-%b-%y %H:%M:%S GMT"
 #define ASCTIMEDATE "%a %b%t%d %H:%M:%S %Y"
-
-struct http_request {
-	struct tm *time;
-	enum {GET, HEAD, UNSUPPORTED} type;
-	char *uri;
-	int if_modified;
-	int mjr;
-	int mnr;
-};
 
 void
 invalidate_request(struct http_request *req)
@@ -71,7 +62,7 @@ parse_uri_version(int fd, struct http_request *req, char *buf,
 
 	/* TODO: Read till CRLF not LF */
 	while (1) {
-		if ((strncmp(buf + *len - 1, "\n", 1)) == 0)
+		if ((strncmp(buf + *len - 2, "\r\n", 2)) == 0)
 			break;
 		if ((int)(rd = read(fd, buf + *len, *size - *len)) == -1)
 			err(1, "read");
@@ -194,9 +185,9 @@ parse_request(int fd, struct http_request *req)
 	
         /* parse request header fields */
 	while (1) {
-		if (strncmp(buf + len - 2, "\n\n", 2) == 0)
+		if (strncmp(buf + len - 4, "\r\n\r\n", 4) == 0)
 			break;
-		if (strncmp(buf + len - 1, "\n", 1) == 0) {
+		if (strncmp(buf + len - 2, "\r\n", 2) == 0) {
 			parse_headers(req, buf + prev);
 			prev = len;
 		}
@@ -212,39 +203,5 @@ parse_request(int fd, struct http_request *req)
 	}
 
 	free(buf);
-	return 0;
-}
-
-int
-main(void)
-{
-	struct http_request req;
-
-	req.uri = malloc(sizeof(char *) * BUFSIZ);
-	req.time = malloc(sizeof(struct tm));
-	if ((parse_request(STDIN_FILENO,&req)) == -1)
-		printf("%s\n", "*invalid_request*");
-
-	switch (req.type) {
-	case GET:
-		printf("GET\t");
-		break;
-	case HEAD:
-		printf("HEAD\t");
-		break;
-	default:
-		printf("UNSUPPORTED\t");
-		break;
-	}
-	printf("%s\t", req.uri);
-	printf("%d.", req.mjr);
-	printf("%d\n", req.mnr);
-
-	if (!req.if_modified)
-		return 0;
-
-	printf("if-modified-since: %d %d %d\n",
-	       req.time->tm_wday, req.time->tm_mon, req.time->tm_year);
-	
 	return 0;
 }

@@ -5,119 +5,50 @@
 #include <netinet/in.h>
 
 #include <err.h>
+#include <limits.h>
 #include <netdb.h>
 #include <poll.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
-#include "extern.h" 
 
-struct http_request {
-	enum {GET, HEAD, UNSUPPORTED} type;
-	char *uri;
-	int if_modified;
-	int mjr;
-	int mnr;
-};
-
-void
-invalidate_request(struct http_request *req)
-{
-	req->type = UNSUPPORTED;
-	req->uri = NULL;
-	req->if_modified = -1;
-	req->mjr = -1;
-	req->mnr = -1;
-}
-
-void
-parse_header(struct http_request *req, ssize_t urisz, char *buf, ssize_t bufsz)
-{
-	size_t len;
-	char *invalid;
-
-	if (bufsz == 0) {
-		invalidate_request(req);
-		return;
-	}
-
-	len = strcspn(buf, " ");
-	if ((strncmp(buf, "GET", len)) == 0)
-		req->type = GET;
-	else if ((strncmp(buf, "HEAD", len)) == 0)
-		req->type = HEAD;
-	else
-		req->type = UNSUPPORTED;
-
-	buf += len + 1;
-	len = strcspn(buf, " ");
-
-	strncpy(req->uri, (const char *)buf, urisz);
-	req->uri[len] = '\0';
-
-	buf += len + 1;
-	len = strcspn(buf, "/");
-
-	if ((strncmp(buf, "HTTP", len)) != 0) {
-		invalidate_request(req);
-		return;
-	}
-
-	buf += len + 1;
-	len = strcspn(buf, "\r\n");
-
-	if (len == 0) {
-		req->mjr = 0;
-		req->mnr = 9;
-		return;
-	}
-	
-	len = strcspn(buf, ".");
-	req->mjr = strtol(buf, &invalid, 10);
-
-	if (buf == invalid) {
-		invalidate_request(req);
-		return;
-	}
-	
-	buf += len + 1;
-	req->mnr = strtol(buf, &invalid, 10);
-
-	if (buf == invalid) {
-		invalidate_request(req);
-		return;
-	}
-}
+#include "extern.h"
+#include "parse.h"
 
 void http(int fd) {
-    char *buf;
-    ssize_t rd, size, length;
+    struct http_request req;
 
-    size = BUFSIZ;
-    length = 0;
-    buf = calloc(size, 1);
+    if ((req.uri = malloc(sizeof(char) * PATH_MAX)) == NULL)
+        err(1, "malloc");
 
-    while (true) {
-        if (strncmp(buf + length - 4, "\r\n\r\n", 4) == 0) {
-            break;
-        }
+    if ((req.time = malloc(sizeof(struct tm))) == NULL)
+        err(1, "malloc");
+    
+    if (parse_request(fd, &req) == -1)
+        err(1, "parse_request");
 
-        rd = read(fd, buf, size - length);
-        if (rd == size - length) {
-            size *= 2;
-            buf = realloc(buf, size);
-        } else if (rd == 0) {
-            printf("read 0\n");
-            break;
-        }
-        length += rd;
+    printf("received : ");
+    switch (req.type) {
+    case GET:
+        printf("GET ");
+        break;
+    case HEAD:
+        printf("HEAD ");
+        break;
+    default:
+        printf("Unsupported request");
+        return;
     }
 
-    printf("received [%s]\n", buf);
+    printf("%s ", req.uri);
+    printf("%d.%d", req.mjr, req.mnr);
 
-    free(buf);
+    if (!req.if_modified)
+        return;
+    printf(" since: %s\n", asctime(req.time));
 }
 
 char *sockaddr_to_str(struct sockaddr *addr, socklen_t addrlen) {
