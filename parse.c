@@ -14,15 +14,6 @@
 #define RFC850DATE  "%A, %d-%b-%y %H:%M:%S GMT"
 #define ASCTIMEDATE "%a %b%t%d %H:%M:%S %Y"
 
-void
-invalidate_request(struct http_request *req)
-{
-	req->type = UNSUPPORTED;
-	req->uri = NULL;
-	req->time = NULL;
-	req->if_modified = req->mjr = req->mnr = -1;
-}
-
 /* parse_request_type: read(2) upto 5 bytes from `fd`.  Check whether the
  * request type is supported.  Assumes that the size of the buffer is more
  * than 5 bytes.
@@ -171,13 +162,11 @@ parse_request(int fd, struct http_request *req)
 		err(1, "calloc");
 
 	if ((parse_request_type(fd, req, buf, &len)) == -1) {
-		invalidate_request(req);
 		free(buf);
 		return -1;
 	}
 
 	if ((parse_uri_version(fd, req, buf, &len, &size)) == -1) {
-		invalidate_request(req);
 		free(buf);
 		return -1;
 	}
