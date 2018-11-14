@@ -4,6 +4,7 @@ sws: args.o sws.o parse.o
 	$(CC) $(CFLAGS) -o $@ $^ $>
 
 clean:
+	rm *.o
 	rm sws
 
 .PHONY: clean
