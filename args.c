@@ -23,7 +23,7 @@ void is_valid_ip(char *ipAddress);
 /*
  * Source: strtol(3)
  */
-int convert_to_int(char *port_string);
+int is_valid_port(char *port_string);
 
 int
 parse_args(int argc, char **argv,struct options *options, \
@@ -65,7 +65,7 @@ parse_args(int argc, char **argv,struct options *options, \
                 break;
             case 'p':
                 options->port = true;
-                port_num = convert_to_int(optarg); 
+                is_valid_port(optarg); 
                 printf("port: %d\n",port_num);
                 server_info->port = optarg;
                 break;
@@ -105,11 +105,10 @@ is_valid_ip(char *ipAddress){
     }
 }
 
-int
-convert_to_int(char *port_string)
+void
+is_valid_port(char *port_string)
 {
     char *ep;
-    int ival;
     long lval;
     errno = 0;
     
@@ -120,7 +119,7 @@ convert_to_int(char *port_string)
         exit(EXIT_FAILURE);
     }
 
-    if (errno == ERANGE || lval < INT_MIN || INT_MAX < lval){
+    if (errno == ERANGE || lval < 0 || INT_MAX < lval){
         fprintf(stderr,"Port number is out of range\n");
         exit(EXIT_FAILURE);
     }
@@ -130,13 +129,6 @@ convert_to_int(char *port_string)
         exit(EXIT_FAILURE);
     }
 
-    if(INT_MIN > lval || lval > INT_MAX){
-        fprintf(stderr,"Port number is too large \n");
-        exit(EXIT_FAILURE);
-    }
-
-    ival = lval;
-    return ival;
 }
 
 static void
