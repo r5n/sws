@@ -14,9 +14,7 @@
 #include <sysexits.h>
 #include <unistd.h>
 
-#ifndef _EXTERN_H_
 #include "extern.h"
-#endif
 
 static void usage();
 void is_valid_address(char *ipAddress);

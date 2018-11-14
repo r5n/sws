@@ -1,6 +1,7 @@
 #ifndef _EXTERN_H_
-#include <stdbool.h>
+#define _EXTERN_H_
 
+#include <stdbool.h>
 
 struct options{
     bool cgi; 
@@ -19,5 +20,5 @@ struct server_info{
 };
 
 int parse_args(int, char **,struct options *,struct server_info *);
-#endif
 
+#endif // ifndef _EXTERN_H_
