@@ -45,9 +45,10 @@ void http(int fd) {
     printf("%s ", req.uri);
     printf("%d.%d", req.mjr, req.mnr);
 
-    if (!req.if_modified)
-        return;
-    printf(" since: %s\n", asctime(req.time));
+    if (req.if_modified)
+        printf(" since: %s\n", asctime(req.time));
+    else
+        printf("\n");
 }
 
 char *sockaddr_to_str(struct sockaddr *addr, socklen_t addrlen) {
