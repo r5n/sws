@@ -24,7 +24,7 @@ void is_valid_address(char *ipAddress);
 void is_valid_port(char *port_string);
 
 int
-parse_args(int argc, char **argv,struct options *options, \
+parse_args(int argc, char **argv,struct options *options,
         struct server_info * server_info)
 { 
     int c;
@@ -77,7 +77,7 @@ is_valid_address(char *ipAddress){
     struct sockaddr_in6 sa6;
     int result_ipv4, result_ipv6;
     
-    if((strnlen(ipAddress, INET_ADDRSTRLEN) == INET_ADDRSTRLEN) && \
+    if((strnlen(ipAddress, INET_ADDRSTRLEN) == INET_ADDRSTRLEN) &&
         INET6_ADDRSTRLEN == strnlen(ipAddress, INET6_ADDRSTRLEN)){
         fprintf(stderr,"address is too long\n");
         exit(EXIT_FAILURE);
