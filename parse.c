@@ -16,7 +16,7 @@
 
 /* parse_request_type: read(2) upto 5 bytes from `fd`.  Check whether the
  * request type is supported.  Assumes that the size of the buffer is more
- * than 5 bytes.
+ * than 5 bytes. Returns 0 if successful, -1 on failure.
  */
 int
 parse_request_type(int fd, struct http_request *req,
@@ -36,7 +36,7 @@ parse_request_type(int fd, struct http_request *req,
 		if ((rd = read(fd, buf + *len, 1)) == -1)
 			err(1, "read");
 		*len += 1;
-		return (*(buf + *len - 1) == ' ' ? 0 : -1);
+		return buf[*len - 1] == ' ' ? 0 : -1;
 	}
 	return -1;
 }
