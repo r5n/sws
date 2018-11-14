@@ -118,7 +118,7 @@ is_valid_port(char *port_string)
         exit(EXIT_FAILURE);
     }
 
-    if(!errno == 0){
+    if(errno){
         fprintf(stderr,"An error occured while parsing the provided port: %s\n",strerror(errno));
         exit(EXIT_FAILURE);
     }
