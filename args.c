@@ -19,18 +19,17 @@
 #endif
 
 static void usage();
-void is_valid_ip(char *ipAddress);
+void is_valid_address(char *ipAddress);
 /*
  * Source: strtol(3)
  */
-int is_valid_port(char *port_string);
+void is_valid_port(char *port_string);
 
 int
 parse_args(int argc, char **argv,struct options *options, \
         struct server_info * server_info)
 { 
     int c;
-    int port_num;
     char *host_name;
     char * cgi_dir;
     setprogname(argv[0]);
@@ -42,7 +41,6 @@ parse_args(int argc, char **argv,struct options *options, \
                 if(!optarg)
                     usage();
                 cgi_dir = optarg;
-                printf("dir: %s\n",cgi_dir);
                 server_info->dir = cgi_dir;
                 break;
             case 'd':
@@ -55,8 +53,7 @@ parse_args(int argc, char **argv,struct options *options, \
             case 'i':
                 options->bind_to = true;
                 host_name = optarg;
-                is_valid_ip(host_name);
-                printf("%s\n",host_name);
+                is_valid_address(host_name);
                 server_info->address = host_name;
                 break;
             case 'l':
@@ -66,7 +63,6 @@ parse_args(int argc, char **argv,struct options *options, \
             case 'p':
                 options->port = true;
                 is_valid_port(optarg); 
-                printf("port: %d\n",port_num);
                 server_info->port = optarg;
                 break;
             default:
@@ -78,7 +74,7 @@ parse_args(int argc, char **argv,struct options *options, \
 
 
 void
-is_valid_ip(char *ipAddress){
+is_valid_address(char *ipAddress){
     struct sockaddr_in sa;
     struct sockaddr_in6 sa6;
     int result_ipv4, result_ipv6;
