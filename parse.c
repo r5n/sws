@@ -10,7 +10,6 @@
 #include "extern.h"
 
 #define IF_MODIFIED "If-Modified-Since"
-#define IF_MODLEN   17
 #define RFC1123DATE "%a, %d %b %Y %H:%M:%S GMT"
 #define RFC850DATE  "%A, %d-%b-%y %H:%M:%S GMT"
 #define ASCTIMEDATE "%a %b%t%d %H:%M:%S %Y"
@@ -45,7 +44,7 @@ parse_request_type(int fd, struct http_request *req,
 /* parse_uri_version: parse information from first line of request and
  * update `req`.
  */
-int
+char *
 parse_uri_version(int fd, struct http_request *req, char **buf,
 		  size_t *len, size_t *size)
 {
@@ -73,7 +72,6 @@ parse_uri_version(int fd, struct http_request *req, char **buf,
 	}
 
 	crlf[0] = '\0';
-	crlf[1] = '\0';
 
 	parseat = *buf + off;
 
@@ -82,7 +80,8 @@ parse_uri_version(int fd, struct http_request *req, char **buf,
 		req->uri = strdup(parseat);
 		req->mjr = 0;
 		req->mnr = 9;
-		return 0;
+		parseat = &crlf[2];
+		return parseat;
 	}
 
 	*spc = '\0';
@@ -92,54 +91,63 @@ parse_uri_version(int fd, struct http_request *req, char **buf,
 	parseat = spc + 1;
 
 	if ((strncmp(parseat, "HTTP/", 5)) != 0) {
-		return -1;
+		return NULL;
 	}
 
 	parseat += 5;
 
 	req->mjr = strtol(parseat, &invalid, 10);
 	if (parseat == invalid) {
-		return -1;
+		return NULL;
 	}
 
 	if ((strsep(&parseat, ".")) == NULL) {
-		return -1;
+		return NULL;
 	}
 
 	req->mnr = strtol(parseat, &invalid, 10);
 	if (parseat == invalid) {
-		return -1;
+		return NULL;
 	}
 
-	return 0;
+	parseat = &crlf[2];
+
+	return parseat;
 }
 
-/* parse_headers: check for If-Modified-Since.  If not found, return 1;
- * if found, return 0;  if found, and date is invalid, return -1;
- */
-int
-parse_headers(struct http_request *req, char *buf)
+/* parse_header: check for If-Modified-Since */
+char *
+parse_header(struct http_request *req, char *buf, char *crlf)
 {
-	size_t spc;
-	char *pnt, *chr;
-	
-	if ((strncmp(buf, IF_MODIFIED, IF_MODLEN)) != 0)
-		return 1;
+	char *chr, *sep;
+
+	if ((sep = strstr(buf, ": ")) == NULL)
+		return NULL;
+
+	sep[0] = '\0';
+	sep[1] = '\0';
+
+	if (strncasecmp(buf, IF_MODIFIED, strlen(IF_MODIFIED)) != 0)
+		return &crlf[2];
 
 	req->if_modified = 1;
 
-	spc = strcspn(buf, ":");
-	spc += strspn(buf + spc + 1, " ");
-	pnt = buf + spc + 1;
+	buf = &sep[2];
 
-	if ((chr = strptime(pnt, RFC1123DATE, req->time)) != NULL)
-		return 0;
-	if ((chr = strptime(pnt, RFC850DATE, req->time)) != NULL)
-		return 0;
-	if ((chr = strptime(pnt, ASCTIMEDATE, req->time)) != NULL)
-		return 0;
-	
-	return -1;
+	if ((chr = strptime(buf, RFC1123DATE, req->time)) != NULL) {
+		return &crlf[2];
+	}
+	if ((chr = strptime(buf, RFC850DATE, req->time)) != NULL) {
+		return &crlf[2];
+	}
+	if ((chr = strptime(buf, ASCTIMEDATE, req->time)) != NULL) {
+		return &crlf[2];
+	}
+
+	// parse of time failed
+	req->if_modified = 0;
+
+	return &crlf[2];
 }
 
 /* parse_request: parse http request and store information in `req`.  `req`
@@ -149,8 +157,9 @@ parse_headers(struct http_request *req, char *buf)
 int
 parse_request(int fd, struct http_request *req)
 {
-	size_t size, prev, len, rd;
-	char *buf;
+	size_t size, len;
+	ssize_t rd;
+	char *buf, *parseat, *crlf;
 
 	size = BUFSIZ;
 	len = 0;
@@ -163,28 +172,32 @@ parse_request(int fd, struct http_request *req)
 		return -1;
 	}
 
-	if ((parse_uri_version(fd, req, &buf, &len, &size)) == -1) {
+	if ((parseat = parse_uri_version(fd, req, &buf, &len, &size)) == NULL) {
 		free(buf);
 		return -1;
 	}
-	prev = len;
 	
         /* parse request header fields */
 	while (1) {
-		if (strncmp(buf + len - 4, "\r\n\r\n", 4) == 0)
+		if (strncmp(parseat, "\r\n", 2) == 0) {
 			break;
-		if (strncmp(buf + len - 2, "\r\n", 2) == 0) {
-			parse_headers(req, buf + prev);
-			prev = len;
 		}
-		if ((int)(rd = read(fd, buf + len, size - len)) == -1)
+		if ((crlf = strstr(parseat, "\r\n"))) {
+			parseat = parse_header(req, parseat, crlf);
+			if (parseat == NULL) {
+				errx(1, "invalid header");
+			}
+			continue;
+		}
+		if ((rd = read(fd, buf + len, size - len)) < 0)
 			err(1, "read");
-		if (rd == size - len) {
+		if ((size_t)rd == size - len) {
 			size *= 2;
 			if ((buf = realloc(buf, size)) == NULL)
 				err(1, "realloc");
-		} else if (rd == 0)
+		} else if (rd == 0) { // EOF
 			break;
+		}
 		len += rd;
 	}
 
