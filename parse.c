@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <ctype.h>
 #include <err.h>
 #include <stdio.h>
@@ -45,75 +46,71 @@ parse_request_type(int fd, struct http_request *req,
  * update `req`.
  */
 int
-parse_uri_version(int fd, struct http_request *req, char *buf,
+parse_uri_version(int fd, struct http_request *req, char **buf,
 		  size_t *len, size_t *size)
 {
-	size_t rd, spc;
-	char *savebuf, *invalid;
+	ssize_t rd;
+	size_t off;
+	char *parseat, *invalid, *crlf, *spc;
 
-	/* TODO: Read till CRLF not LF */
+	// parse starting from this offset, to skip the "GET "
+	off = *len;
+	assert(off == 4 || off == 5); // "GET " or "HEAD "
+
 	while (1) {
-		if ((strncmp(buf + *len - 2, "\r\n", 2)) == 0)
+		if ((crlf = strstr(*buf + off, "\r\n")))
 			break;
-		if ((int)(rd = read(fd, buf + *len, *size - *len)) == -1)
+		if ((rd = read(fd, *buf + *len, *size - *len)) < 0)
 			err(1, "read");
-		if (rd == *size - *len) {
+		if ((size_t)rd == *size - *len) {
 			*size *= 2;
-			if ((buf = realloc(buf, *size)) == NULL)
+			if ((*buf = realloc(*buf, *size)) == NULL)
 				err(1, "realloc");
-		} else if (rd == 0)
+		} else if (rd == 0) {
 			break;
+		}
 		*len += rd;
 	}
 
-	if ((savebuf = strsep(&buf, " ")) == NULL)
-		return -1;
+	crlf[0] = '\0';
+	crlf[1] = '\0';
 
-	spc = strcspn(buf, " ");
+	parseat = *buf + off;
 
-	(void)strncpy(req->uri, buf, spc);
-	*(req->uri + spc + 1) = '\0';
-
-	if (spc == strlen(buf)) { /* simple request */
+	spc = strchr(parseat, ' ');
+	if (!spc) { // simple request
+		req->uri = strdup(parseat);
 		req->mjr = 0;
 		req->mnr = 9;
-		buf = savebuf;
 		return 0;
 	}
-	
-	if ((strsep(&buf, " ")) == NULL) {
-		buf = savebuf;
-		return -1;
-	}
-	
-	if ((strncmp(buf,"HTTP",4)) != 0) {
-		buf = savebuf;
+
+	*spc = '\0';
+
+	req->uri = strdup(parseat);
+
+	parseat = spc + 1;
+
+	if ((strncmp(parseat, "HTTP/", 5)) != 0) {
 		return -1;
 	}
 
-	if ((strsep(&buf, "/")) == NULL) {
-		buf = savebuf;
+	parseat += 5;
+
+	req->mjr = strtol(parseat, &invalid, 10);
+	if (parseat == invalid) {
 		return -1;
 	}
 
-	req->mjr = strtol(buf, &invalid, 10);
-	if (buf == invalid) {
-		buf = savebuf;
+	if ((strsep(&parseat, ".")) == NULL) {
 		return -1;
 	}
 
-	if ((strsep(&buf, ".")) == NULL) {
-		buf = savebuf;
+	req->mnr = strtol(parseat, &invalid, 10);
+	if (parseat == invalid) {
 		return -1;
 	}
-	
-	req->mnr = strtol(buf, &invalid, 10);
-	if (buf == invalid) {
-		buf = savebuf;
-		return -1;
-	}
-	
-	buf = savebuf;
+
 	return 0;
 }
 
@@ -166,7 +163,7 @@ parse_request(int fd, struct http_request *req)
 		return -1;
 	}
 
-	if ((parse_uri_version(fd, req, buf, &len, &size)) == -1) {
+	if ((parse_uri_version(fd, req, &buf, &len, &size)) == -1) {
 		free(buf);
 		return -1;
 	}

@@ -20,9 +20,6 @@
 void http(int fd) {
     struct http_request req;
 
-    if ((req.uri = malloc(PATH_MAX)) == NULL)
-        err(1, "malloc");
-
     if ((req.time = malloc(sizeof(struct tm))) == NULL)
         err(1, "malloc");
     
