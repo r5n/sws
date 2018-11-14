@@ -101,7 +101,8 @@ main(int argc,char **argv) {
     struct options options;
     
     init_struct(&server_info);
-    parse_args(argc,argv,&options,&server_info);
+    if (parse_args(argc,argv,&options,&server_info))
+        return 1;
     
     host = server_info.address;
     port = server_info.port;

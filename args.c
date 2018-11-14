@@ -17,11 +17,8 @@
 #include "extern.h"
 
 static void usage();
-void is_valid_address(char *ipAddress);
-/*
- * Source: strtol(3)
- */
-void is_valid_port(char *port_string);
+void assert_valid_address(char *ipAddress);
+void assert_valid_port(char *port_string);
 
 int
 parse_args(int argc, char **argv,struct options *options,
@@ -29,17 +26,13 @@ parse_args(int argc, char **argv,struct options *options,
 { 
     int c;
     char *host_name;
-    char * cgi_dir;
     setprogname(argv[0]);
     while((c = getopt (argc,argv, "c:dhi:l:p:")) != -1)
         switch(c)
         {
             case 'c':
                 options->cgi = true;
-                if(!optarg)
-                    usage();
-                cgi_dir = optarg;
-                server_info->dir = cgi_dir;
+                server_info->dir = optarg;
                 break;
             case 'd':
                 options->debug = true;
@@ -47,11 +40,11 @@ parse_args(int argc, char **argv,struct options *options,
             case 'h':
                 options->help = true;
                 usage();
-                break;
+                return 1;
             case 'i':
                 options->bind_to = true;
                 host_name = optarg;
-                is_valid_address(host_name);
+                assert_valid_address(host_name);
                 server_info->address = host_name;
                 break;
             case 'l':
@@ -60,67 +53,61 @@ parse_args(int argc, char **argv,struct options *options,
                 break;
             case 'p':
                 options->port = true;
-                is_valid_port(optarg); 
+                assert_valid_port(optarg);
                 server_info->port = optarg;
                 break;
             default:
                 usage();
-                break;
+                return 1;
         }
     return 0;
 }
 
 
 void
-is_valid_address(char *ipAddress){
+assert_valid_address(char *ipAddress){
     struct sockaddr_in sa;
     struct sockaddr_in6 sa6;
     int result_ipv4, result_ipv6;
     
     if((strnlen(ipAddress, INET_ADDRSTRLEN) == INET_ADDRSTRLEN) &&
         INET6_ADDRSTRLEN == strnlen(ipAddress, INET6_ADDRSTRLEN)){
-        fprintf(stderr,"address is too long\n");
-        exit(EXIT_FAILURE);
+        errx(EXIT_FAILURE, "Address is too long");
     }
     
     if((result_ipv4 = inet_pton(AF_INET, ipAddress, &(sa.sin_addr))) == -1){
-            fprintf(stderr,"Could not parse provided address\n");
-            exit(EXIT_FAILURE);
+        err(EXIT_FAILURE, "Could not parse provided IPv4 address");
     }
     
     if((result_ipv6 = inet_pton(AF_INET6, ipAddress, &(sa6.sin6_addr))) == -1){
-            fprintf(stderr,"Could not parse provided address\n");
-            exit(EXIT_FAILURE);
+        err(EXIT_FAILURE, "Could not parse provided IPv6 address");
     }
     
     if(!result_ipv4 && !result_ipv6){
-        fprintf(stderr,"Please provide a suitable address\n");
-        exit(EXIT_FAILURE);
+        errx(EXIT_FAILURE, "Please provide a suitable address");
     }
 }
 
 void
-is_valid_port(char *port_string)
+assert_valid_port(char *port_string)
 {
     char *ep;
     long lval;
+
     errno = 0;
     
     lval = strtol(port_string, &ep, 10);
     
     if (ep == port_string || *ep != '\0'){
-        fprintf(stderr,"Please enter a valid port number\n");
-        exit(EXIT_FAILURE);
+        errx(EXIT_FAILURE, "Please enter a valid port number");
     }
 
-    if (errno == ERANGE || lval < 0 || INT_MAX < lval){
-        fprintf(stderr,"Port number is out of range\n");
-        exit(EXIT_FAILURE);
+    if (errno == ERANGE || lval <= 0 || 65535 < lval){
+        errx(EXIT_FAILURE, "Port number is out of range");
     }
 
     if(errno){
-        fprintf(stderr,"An error occured while parsing the provided port: %s\n",strerror(errno));
-        exit(EXIT_FAILURE);
+        err(EXIT_FAILURE, "An error occured while parsing the provided port");
     }
 
 }
