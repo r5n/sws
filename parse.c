@@ -6,7 +6,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "parse.h"
+#include "extern.h"
 
 #define IF_MODIFIED "If-Modified-Since"
 #define IF_MODLEN   17

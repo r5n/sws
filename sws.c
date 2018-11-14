@@ -16,7 +16,6 @@
 #include <unistd.h>
 
 #include "extern.h"
-#include "parse.h"
 
 void http(int fd) {
     struct http_request req;
