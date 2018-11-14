@@ -167,7 +167,7 @@ parse_request(int fd, struct http_request *req)
 	size = BUFSIZ;
 	len = 0;
 
-	if ((buf = calloc(size, sizeof(char))) == NULL)
+	if ((buf = calloc(size, 1)) == NULL)
 		err(1, "calloc");
 
 	if ((parse_request_type(fd, req, buf, &len)) == -1) {
