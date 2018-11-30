@@ -38,16 +38,16 @@ void logging(char * logpath,char * ipport,char * line){
 		err(1,"could not open log file");
 	}
 
-	terminator = strnlen(ipport,BUFSIZ) + 1 + strnlen(line,BUFSIZ) + 1 + strnlen(time_line,BUFSIZ) + 1;
+	terminator = strnlen(ipport,BUFSIZ) + 1 + strnlen(line,BUFSIZ) + 1 
+			+ strnlen(time_line,BUFSIZ) + 1;
+
 	snprintf(buf,sizeof(buf),"%s %s %s",ipport,time_line,line);
-	printf("%s\n %lu\n%d",buf,strlen(buf),terminator);
 
 	buf[terminator] = '\0';
 
 	if(write(logfd,buf,terminator) == -1)
 		errx(1,"Could not write %s to file: %s",line,logpath);
 
-	printf("File logged\n");
 	(void)close(logfd);
 }
 
