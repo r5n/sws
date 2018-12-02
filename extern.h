@@ -29,6 +29,14 @@ struct http_request {
     int mnr;
 };
 
+struct http_response {
+    struct tm *last_modified;
+    char *content_length;
+    char *reason;
+    size_t content_length;
+    int status;
+};
+
 int parse_request(int, struct http_request *);
 int parse_args(int, char **,struct options *,struct server_info *);
 void write_bad_request(int);

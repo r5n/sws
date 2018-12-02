@@ -19,14 +19,6 @@
 #define PLAIN_STR    "text/plain"
 #define PLAIN_LEN    10
 
-struct http_response {
-    struct tm *last_modified;
-    char *content_type;
-    char *reason;
-    size_t content_length;
-    int status;
-};
-
 void
 free_response(struct http_response *resp)
 {
