@@ -13,6 +13,7 @@ struct options{
 };
 
 struct server_info{
+    char * cgi_dir;
     char * dir;
     char * address;
     char * logdir;

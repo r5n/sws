@@ -27,12 +27,12 @@ parse_args(int argc, char **argv,struct options *options,
     int c;
     char *host_name;
     setprogname(argv[0]);
-    while((c = getopt (argc,argv, "c:dhi:l:p:")) != -1)
+    while((c = getopt (argc,argv, "c:dhi:l:p:")) != -1){
         switch(c)
         {
             case 'c':
                 options->cgi = true;
-                server_info->dir = optarg;
+                server_info->cgi_dir = optarg;
                 break;
             case 'd':
                 options->debug = true;
@@ -60,6 +60,18 @@ parse_args(int argc, char **argv,struct options *options,
                 usage();
                 return 1;
         }
+    }
+
+    argc -= optind;
+    argv += optind;
+
+    if (argc != 1) {
+        usage();
+        return 1;
+    }
+
+    server_info->dir = argv[0];
+
     return 0;
 }
 

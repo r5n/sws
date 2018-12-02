@@ -77,6 +77,7 @@ char *sockaddr_to_str(struct sockaddr *addr, socklen_t addrlen) {
 
 void
 init_struct(struct server_info *server){
+    server->cgi_dir = NULL;
     server->dir = NULL;
     server->address = NULL;
     server->logdir = NULL;
@@ -92,14 +93,27 @@ main(int argc,char **argv) {
     int clientsock, set, status;
     nfds_t nsocks, i;
     socklen_t clientsz;
-    char *host, *port, *ipport;
+    char *host, *port, *ipport, *dir;
     struct pollfd *fds;
     struct server_info server_info;
     struct options options;
+    struct stat dir_st;
     
     init_struct(&server_info);
     if (parse_args(argc,argv,&options,&server_info))
         return 1;
+
+    dir = realpath(server_info.dir, NULL);
+    if (!dir)
+        err(1, "%s", server_info.dir);
+
+    if (stat(dir, &dir_st) < 0)
+        err(1, "%s", dir);
+
+    if (!S_ISDIR(dir_st.st_mode))
+        errx(1, "%s is not a directory", dir);
+
+    printf("Serving from %s\n", dir);
     
     host = server_info.address;
     port = server_info.port;
