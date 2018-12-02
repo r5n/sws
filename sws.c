@@ -59,8 +59,10 @@ void http(int fd,char * ipport) {
 	if ((req.time = malloc(sizeof(struct tm))) == NULL)
 		err(1, "malloc");
 
-	if (parse_request(fd, &req) == -1)
-		err(1, "parse_request");
+	if (parse_request(fd, &req) == -1) {
+	    /* err(1, "parse_request"); */
+		write_bad_request(fd);
+	}
 
 	printf("received : ");
 	switch (req.type) {

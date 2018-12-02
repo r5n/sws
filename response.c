@@ -9,11 +9,15 @@
 
 #include "extern.h"
 
+#define BAD_REQ      "Bad Request"
+#define BAD_REQ_LEN  11
 #define CRLF         "\r\n"
 #define DATE_FMT     "%a, %d %b %Y %H:%M:%S GMT"
 #define HTTP_TYPE    "HTTP/1.0"
 #define SERVER_INFO  "sws/1.0"
 #define TEXT         "something something dark side"
+#define PLAIN_STR    "text/plain"
+#define PLAIN_LEN    10
 
 struct http_response {
     struct tm *last_modified;
@@ -56,41 +60,36 @@ resp_header(int fd, struct http_response *resp)
     dprintf(fd, "%s", CRLF);
 }
 
-struct http_response *
-sample_response(void)
+/* For when parsing fails and we don't have a request object */
+void
+write_bad_request(int fd)
 {
+    struct http_response *resp;
     time_t now;
     struct tm *tm_p;
     
     time(&now);
     tm_p = gmtime(&now);
-	
-    struct http_response *resp;
+
+    /* Do we need last_modified? */
     if ((resp = malloc(sizeof(struct http_response))) == NULL)
 	err(1, "malloc");
-
-    resp->status = 200;
-    resp->content_length = strlen(TEXT);
+    
     resp->last_modified = tm_p;
+    resp->status = 400;
+    resp->content_length = strlen(BAD_REQ);
 
-    if ((resp->content_type = malloc(sizeof(char *) * BUFSIZ)) == NULL)
+    if ((resp->content_type = malloc(PLAIN_LEN+1)) == NULL)
 	err(1, "malloc");
-    (void)strncpy(resp->content_type, "text/plain", BUFSIZ - 1);
-    resp->content_type[BUFSIZ] = '\0';
+    (void)strncpy(resp->content_type, "text/plain", PLAIN_LEN);
+    resp->content_type[PLAIN_LEN+1] = '\0';
 
-    if ((resp->reason = malloc(sizeof(char *) * BUFSIZ)) == NULL)
+    if ((resp->reason = malloc(BAD_REQ_LEN+1)) == NULL)
 	err(1, "malloc");
-    (void)strncpy(resp->reason, "OK", BUFSIZ - 1);
-    resp->reason[BUFSIZ] = '\0';
+    (void)strncpy(resp->reason, BAD_REQ, BAD_REQ_LEN);
+    resp->reason[BAD_REQ_LEN+1] = '\0';
 
-    return resp;
-}
-
-void
-write_sample_response(int fd)
-{
-    struct http_response *resp;
-    resp = sample_response();
     resp_header(fd, resp);
-    dprintf(fd, "%s" CRLF, TEXT);
+    dprintf(fd, "%s" CRLF, BAD_REQ);   /* For now */
+    free_response(resp);
 }

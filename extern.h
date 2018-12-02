@@ -20,15 +20,16 @@ struct server_info{
 };
 
 struct http_request {
-	struct tm *time;
-	enum {GET, HEAD, UNSUPPORTED} type;
-	char *uri;
-	int if_modified;
-	int mjr;
-	int mnr;
+    struct tm *time;
+    enum {GET, HEAD, UNSUPPORTED} type;
+    char *uri;
+    int if_modified;
+    int mjr;
+    int mnr;
 };
 
 int parse_request(int, struct http_request *);
 int parse_args(int, char **,struct options *,struct server_info *);
+void write_bad_request(int);
 
 #endif // ifndef _EXTERN_H_
