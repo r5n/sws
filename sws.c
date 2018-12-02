@@ -20,42 +20,57 @@
 #include "extern.h"
 
 
-#define MAX_TIME_LENGTH 45
+char *
+convert_to_string[] = {
+        "GET","HEAD","UNSUPPORTED"
+};
+
 // log format: remote_ip time_in_GMT first_line status size_of_the_response
-void logging(char * logpath,char * ipport,char * line){
-	int logfd;
-	time_t now;
-	char time_line[BUFSIZ];
-	char buf[BUFSIZ];
-	int terminator = 0;
-	struct tm * time_struct;
-	time(&now);
-	time_struct = gmtime(&now);
+void
+logging(struct options *options,struct server_info *server_info,char *ipport,char *line)
+{
+        int logfd;
+        time_t now;
+        char time_line[BUFSIZ];
+        char buf[BUFSIZ];
+        struct tm *time_struct;
+
+        time(&now);
+        time_struct = gmtime(&now);
+
         if(strftime(time_line,BUFSIZ,"%d/%b/%Y:%T:%z",time_struct) == 0){
-		err(1,"Could not format time");
-	}	
-	if((logfd = open(logpath,O_WRONLY | O_APPEND | O_CREAT,0666)) == -1){
-		err(1,"could not open log file");
-	}
+                err(1,"Could not format time");
+        }
 
-	terminator = strnlen(ipport,BUFSIZ) + 1 + strnlen(line,BUFSIZ) + 1 
-			+ strnlen(time_line,BUFSIZ) + 1;
+        if((logfd = open(server_info->logdir,O_WRONLY | O_APPEND | O_CREAT,0666)) == -1){
+                err(1,"could not open log file");
+        }
 
-	snprintf(buf,sizeof(buf),"%s %s %s",ipport,time_line,line);
 
-	buf[terminator] = '\0';
+        if(sprintf(buf,"%s %s %s\n",ipport,time_line,line) < 0)
+                err(1,"sprintf error");
 
-	if(write(logfd,buf,terminator) == -1)
-		errx(1,"Could not write %s to file: %s",line,logpath);
+        printf("%s %s %s\n",ipport,time_line,line);
 
-	(void)close(logfd);
+        if(options->debug)
+                printf("%s",buf);
+        else{
+                if(write(logfd,buf,strlen(buf)) == -1)
+                        err(1,"Could not write %s to file:",line);
+        }
+
+        (void)close(logfd);
 }
 
 
 
-void http(int fd,char * ipport) {
-	struct http_request req;
 
+
+void http(struct options *options,struct server_info * server_info,int fd,char * ipport) 
+{
+	struct http_request req;
+	char reqstring[BUFSIZ];
+	
 	if ((req.time = malloc(sizeof(struct tm))) == NULL)
 		err(1, "malloc");
 
@@ -76,15 +91,17 @@ void http(int fd,char * ipport) {
 			printf("Unsupported request");
 			return;
 	}
+        printf("%s ", req.uri);
+        printf("%d.%d", req.mjr, req.mnr);
+        if((sprintf(reqstring,"%s %s HTTP/%d.%d",convert_to_string[req.type],req.uri,req.mjr,req.mnr)) < 0)
+                err(1,"Request string creation failed:");
 
-	printf("%s ", req.uri);
-	printf("%d.%d", req.mjr, req.mnr);
 
-	if (req.if_modified)
-		printf(" since: %s\n", asctime(req.time));
-	else
-		printf("\n");
-	logging("sws.log",ipport,"First line");
+        if (req.if_modified)
+                printf(" since: %s\n", asctime(req.time));
+        else
+                printf("\n");
+        logging(options,server_info,ipport,reqstring);
 }
 
 char *sockaddr_to_str(struct sockaddr *addr, socklen_t addrlen) {
@@ -118,7 +135,7 @@ void
 init_struct(struct server_info *server){
 	server->dir = NULL;
 	server->address = NULL;
-	server->logdir = NULL;
+	server->logdir = "sws.log";
 	server->port = "8080";
 }
 
@@ -211,9 +228,8 @@ main(int argc,char **argv) {
 					ipport = sockaddr_to_str((struct sockaddr *)&client, clientsz);
 					printf("got connection from %s\n", ipport);
 					free(ipport);
-					http(clientsock,ipport);
+					http(&options,&server_info,clientsock,ipport);
 					break;
-
 				default: // parent
 					printf("accepted\n");
 					break;
