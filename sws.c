@@ -5,6 +5,7 @@
 
 #include <netinet/in.h>
 
+#include <dirent.h>
 #include <err.h>
 #include <errno.h>
 #include <limits.h>
@@ -36,7 +37,6 @@ logging(struct options *options,struct server_info *server_info,char *ipport,cha
         char buf[BUFSIZ];
         struct tm *time_struct;
 
-
         time(&now);
         time_struct = gmtime(&now);
 
@@ -64,15 +64,10 @@ logging(struct options *options,struct server_info *server_info,char *ipport,cha
         (void)close(logfd);
 }
 
-
-
-
-
-void http(struct options *options,struct server_info * server_info,int fd,char * ipport) 
+void http(struct options *options,struct server_info * server_info,int fd,char * ipport, char *cwd)
 {
 	struct http_request req;
 	char reqstring[BUFSIZ];
-	
 	if ((req.time = malloc(sizeof(struct tm))) == NULL)
 		err(1, "malloc");
 
@@ -93,6 +88,7 @@ void http(struct options *options,struct server_info * server_info,int fd,char *
 			printf("Unsupported request");
 			return;
 	}
+
         printf("%s ", req.uri);
         printf("%d.%d", req.mjr, req.mnr);
         if((sprintf(reqstring,"%s %s HTTP/%d.%d",convert_to_string[req.type],req.uri,req.mjr,req.mnr)) < 0)
@@ -105,7 +101,7 @@ void http(struct options *options,struct server_info * server_info,int fd,char *
                 printf("\n");
         // logging(options,server_info,ipport,reqstring);
 	printf("ipport: %s\n", ipport); // unused warning REMOVE
-	handle_request(fd, options, server_info, &req);
+	handle_request(fd, options, server_info, &req, cwd);
 }
 
 char *sockaddr_to_str(struct sockaddr *addr, socklen_t addrlen) {
@@ -246,7 +242,7 @@ main(int argc,char **argv) {
                     ipport = sockaddr_to_str((struct sockaddr *)&client, clientsz);
                     printf("got connection from %s\n", ipport);
                     free(ipport);
-                    http(&options, &server_info, clientsock, ipport);
+                    http(&options, &server_info, clientsock, ipport, dir);
                     break;
 
                 default: // parent

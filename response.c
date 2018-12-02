@@ -1,5 +1,6 @@
 #include <err.h>
 #include <errno.h>
+#include <libgen.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -102,35 +103,101 @@ internal_error(int fd)
 
 void
 handle_request(int client, struct options *opt,
-	       struct server_info *info, struct http_request *req)
+	       struct server_info *info, struct http_request *req, char *cwd)
 {
     struct http_response *resp;
-    char *uri, *path;
+    char *full, *real, *path, *uri;
+    time_t now;
 
     uri = req->uri;
 
+    // resp = create_resp(req->time, -1, NULL, NULL, -1);
+    resp = malloc(sizeof(struct http_response));
+    if (resp == NULL)
+        err(1, "malloc");
+
+    if (time(&now) == -1)
+        err(1, "time");
+
     if (((strncmp(uri, CGI_BIN, 8)) == 0) && opt->cgi) {
-	uri += 8;
+        uri += 8;
 
-	printf("cgi part ran\n");
+        printf("cgi part ran\n");
 
-	if ((path = malloc(PATH_MAX)) == NULL) {
-	    internal_error(client);
-	    err(1, "malloc");
-	}
+        if ((path = malloc(PATH_MAX)) == NULL) {
+            internal_error(client);
+            err(1, "malloc");
+        }
 
-	path = strdup(info->cgi_dir);
-	(void)strncat(path, uri, PATH_MAX - strlen(path) - 1);
+        path = strdup(info->cgi_dir);
+        (void)strncat(path, uri, PATH_MAX - strlen(path) - 1);
 
-	resp = malloc(sizeof(struct http_response));
-	if (resp == NULL)
-	    err(1, "malloc");
+        resp = malloc(sizeof(struct http_response));
+        if (resp == NULL)
+            err(1, "malloc");
 
-	cgi(path, resp);
-	respond(client, req, resp);
-	return;
+        cgi(path, resp);
+
+    } else {
+
+        full = malloc(strlen(cwd) + 1 + strlen(req->uri));
+        if (!full)
+            err(1, "malloc");
+
+        sprintf(full, "%s/%s", cwd, req->uri);
+        real = realpath(full, NULL);
+        if (!real) {
+            if (errno == ENOENT) {
+                // security vulnerability - leaks the existence of files
+                resp = &(struct http_response){
+                    .last_modified = gmtime(&now),
+                    .content = "",
+                    .content_type = "text/plain",
+                    .reason = "Not Found",
+                    .content_length = 0,
+                    .status = 404
+                };
+            } else {
+                fprintf(stderr, "realpath(%s): %s\n", full, strerror(errno));
+                resp = &(struct http_response){
+                    .last_modified = gmtime(&now),
+                    .content = "",
+                    .content_type = "text/plain",
+                    .reason = "Internal server error",
+                    .content_length = 0,
+                    .status = 500
+                };
+            }
+        } else {
+            // check that we don't serve files outside the public dir
+            char *parent = real;
+            bool forbidden = false;
+
+            while (true) {
+                if (strcmp(cwd, parent) == 0)
+                    break; // all good
+                else if (strstr(parent, cwd) == parent)
+                    parent = dirname(parent);
+                else {
+                    forbidden = true;
+                    break;
+                }
+            }
+
+            if (forbidden) {
+                //const char *response = "HTTP/1.0 403 Forbidden\r\nContent-Length: 0\r\n\r\n";
+                //write(fd, response, strlen(response));
+            } else {
+                //const char *response = "HTTP/1.0 200 Ok\r\nContent-Length: 0\r\n\r\n";
+                //write(fd, response, strlen(response));
+            }
+
+            free(real);
+        }
+
+        respond(client, req, resp);
+        return;
     }
-    
 
     /* TODO Check that uri is a regular file or a directory
      * that contains 'index.html'.  Might be efficient to call
@@ -138,18 +205,13 @@ handle_request(int client, struct options *opt,
 
     /* Need to list out the directory at this point */
     if ((path = malloc(PATH_MAX)) == NULL) {
-	internal_error(client);
-	err(1, "malloc");
+        internal_error(client);
+        err(1, "malloc");
     }
     path = strdup(info->dir);
     (void)strncat(path, uri, PATH_MAX - strlen(path) - 1);
 
     printf("listing path: %s\n", path);
-
-    // resp = create_resp(req->time, -1, NULL, NULL, -1);
-    resp = malloc(sizeof(struct http_response));
-    if (resp == NULL)
-	err(1, "malloc");
 
     listing(client, path, req->time, resp);
     respond(client, req, resp);

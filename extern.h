@@ -43,7 +43,7 @@ int parse_args(int, char **,struct options *,struct server_info *);
 void bad_request(int);
 void cgi(char *, struct http_response *);
 void handle_request(int, struct options *,
-		    struct server_info *, struct http_request *);
+		    struct server_info *, struct http_request *, char *);
 void internal_error(int);
 void listing(int, char *, struct tm *, struct http_response *);
 
