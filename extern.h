@@ -31,6 +31,7 @@ struct http_request {
 
 struct http_response {
     struct tm *last_modified;
+    char *content;
     char *content_type;
     char *reason;
     size_t content_length;
@@ -43,6 +44,7 @@ void bad_request(int);
 void cgi(int, char *);
 void handle_request(int, struct options *,
 		    struct server_info *, struct http_request *);
-void listing(int, char *, struct tm *);
+void internal_error(int);
+void listing(int, char *, struct tm *, struct http_response *);
 
 #endif // ifndef _EXTERN_H_

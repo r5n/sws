@@ -32,7 +32,7 @@ free_response(struct http_response *resp)
 }
 
 struct http_response *
-create_resp(struct tm *tp, int status, char *reason, size_t clen)
+create_resp(struct tm *tp, int status, char *reason, char *content, size_t clen)
 {
     struct http_response *resp;
 
@@ -41,6 +41,7 @@ create_resp(struct tm *tp, int status, char *reason, size_t clen)
 
     resp->last_modified = tp;
     resp->status = status;
+    resp->content = content;
     resp->reason = strdup(reason);
     resp->content_length = clen;
     resp->content_type = strdup("text/plain"); /* For now ? */
@@ -49,7 +50,7 @@ create_resp(struct tm *tp, int status, char *reason, size_t clen)
 }
 
 void
-resp_header(int fd, struct http_response *resp)
+respond(int fd, struct http_request *req, struct http_response *resp)
 {
     time_t now;
     struct tm *tm_p;
@@ -68,11 +69,15 @@ resp_header(int fd, struct http_response *resp)
     dprintf(fd, "Date: %s" CRLF, tmbuf);
     dprintf(fd, "Server: %s" CRLF, SERVER_INFO);
     if (resp->last_modified != NULL)
-	dprintf(fd, "Last-Modified: %s" CRLF, lmbuf);
+    	dprintf(fd, "Last-Modified: %s" CRLF, lmbuf);
     dprintf(fd, "Content-Type: %s" CRLF, resp->content_type);
     if ((int)resp->content_length != -1)
-	dprintf(fd, "Content-Length: %zu" CRLF, resp->content_length);
+    	dprintf(fd, "Content-Length: %zu" CRLF, resp->content_length);
     dprintf(fd, "%s", CRLF);
+    if ((req != NULL) && (req->type == GET)) { // NULL when bad_request
+    	printf("printing content\n");
+    	dprintf(fd, "%s" CRLF, resp->content);
+    }
 }
 
 /* For when parsing fails and we don't have a request object */
@@ -81,9 +86,8 @@ bad_request(int fd)
 {
     struct http_response *resp;
 
-    resp = create_resp(NULL, 400, BAD_REQ, BAD_REQ_LEN);
-    resp_header(fd, resp);
-    dprintf(fd, "%s" CRLF, BAD_REQ);
+    resp = create_resp(NULL, 400, BAD_REQ, BAD_REQ, BAD_REQ_LEN);
+    respond(fd, NULL, resp);
     free_response(resp);
 }
 
@@ -92,9 +96,8 @@ internal_error(int fd)
 {
     struct http_response *resp;
 
-    resp = create_resp(NULL, 500, INT_ERR, sizeof(INT_ERR));
-    resp_header(fd, resp);
-    dprintf(fd, "%s" CRLF, INT_ERR);
+    resp = create_resp(NULL, 500, INT_ERR, INT_ERR, sizeof(INT_ERR));
+    respond(fd, NULL, resp);
     free_response(resp);
 }
 
@@ -107,24 +110,7 @@ handle_request(int client, struct options *opt,
 
     uri = req->uri;
 
-    if (((strncmp(uri, CGI_BIN, 8)) == 0) && opt->cgi) {
-	uri += 8;
-
-	if ((path = malloc(PATH_MAX)) == NULL) {
-	    internal_error(client);
-	    err(1, "malloc"); /* send 500 response */
-	}
-
-	path = strdup(info->cgi_dir);
-
-	(void)strncat(path, uri, PATH_MAX - strlen(path) - 1);
-	printf("cgi path : %s\n", path);
-
-	resp = create_resp(NULL, 200, "OK", -1);
-	resp_header(client, resp);
-	cgi(client, path);
-	return;
-    }
+    printf("CGI: %d\n", opt->cgi);
 
     /* TODO Check that uri is a regular file or a directory
      * that contains 'index.html'.  Might be efficient to call
@@ -138,11 +124,17 @@ handle_request(int client, struct options *opt,
     path = strdup(info->dir);
     (void)strncat(path, uri, PATH_MAX - strlen(path) - 1);
 
-    resp = create_resp(NULL, 200, "OK", -1);
-    resp_header(client, resp);
+    printf("listing path: %s\n", path);
+
+    // resp = create_resp(req->time, -1, NULL, NULL, -1);
+    resp = malloc(sizeof(struct http_request));
+    if (resp == NULL)
+	err(1, "malloc");
+
+    listing(client, path, req->time, resp);
+    respond(client, req, resp);
 
     /* call realpath(3)? */
-    printf("listing path: %s\n", path);
-    listing(client, path, req->time);
     free(path);
+    free_response(resp);
 }
