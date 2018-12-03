@@ -103,12 +103,12 @@ write_entry(char **buf, size_t *bufsz, size_t *buflen,
 }
 
 void
-listing(int fd, char *target, struct tm *mod, struct http_response *resp)
+listing(int fd, char *target, struct http_request *req, struct http_response *resp)
 {
     DIR *dp;
     struct dirent *dirp;
     time_t tmod;
-    struct tm *tp;
+    struct tm *tp, *mod;
     char buf[PATH_MAX + 1], fpath[PATH_MAX + 1], tbuf[STRTIME_LEN];
     struct stat st;
     size_t size, len;
@@ -118,8 +118,11 @@ listing(int fd, char *target, struct tm *mod, struct http_response *resp)
     len = 0;
     path = target;
 
-    if (mod != NULL)
+    mod = req->time;
+    if (req->if_modified == 1) {
 	tmod = mktime(mod);
+	printf("!got time: %s\n", ctime(&tmod));
+    }
 
     fav = strstr(target, "favicon.ico");
     if (fav != NULL) { /* request from browser */
@@ -151,8 +154,9 @@ listing(int fd, char *target, struct tm *mod, struct http_response *resp)
 	if ((stat(fpath, &st)) == -1)
 	    err(1, "stat");
 
-	if (mod != NULL) {
-	    if (difftime(st.st_mtime, tmod) > 0) {
+	if (req->if_modified == 1) {
+	    printf("running a time check\n");
+	    if (difftime(st.st_mtime, tmod) < 0) {
 		printf("have to continue\n");
 		continue;
 	    }

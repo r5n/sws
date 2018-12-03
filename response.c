@@ -159,7 +159,7 @@ handle_request(int client, struct options *opt,
     if (resp == NULL)
 	err(1, "malloc");
 
-    listing(client, path, req->time, resp);
+    listing(client, path, req, resp);
     respond(client, req, resp);
 
     free(path);

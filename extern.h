@@ -45,6 +45,6 @@ void cgi(char *, struct http_response *);
 void handle_request(int, struct options *,
 		    struct server_info *, struct http_request *);
 void internal_error(int);
-void listing(int, char *, struct tm *, struct http_response *);
+void listing(int, char *, struct http_request *, struct http_response *);
 
 #endif // ifndef _EXTERN_H_
