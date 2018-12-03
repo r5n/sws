@@ -29,22 +29,20 @@ struct http_request {
     int mnr;
 };
 
-struct http_response {
+typedef struct {
     struct tm *last_modified;
     char *content;
     char *content_type;
-    char *reason;
-    size_t content_length;
-    int status;
-};
+    int code;
+} response;
 
 int parse_request(int, struct http_request *);
 int parse_args(int, char **,struct options *,struct server_info *);
-void bad_request(int);
-void cgi(char *, struct http_response *);
+void cgi(char *, response *);
 void handle_request(int, struct options *,
-		    struct server_info *, struct http_request *, char *);
+                    struct server_info *, struct http_request *, char *);
+void listing(int, char *, struct tm *, response *);
+void respond(int, response *);
 void internal_error(int);
-void listing(int, char *, struct tm *, struct http_response *);
 
 #endif // ifndef _EXTERN_H_

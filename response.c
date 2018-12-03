@@ -11,115 +11,83 @@
 
 #include "extern.h"
 
-#define BAD_REQ      "Bad Request"
-#define BAD_REQ_LEN  11
-#define CGI_BIN      "/cgi-bin"
-#define CRLF         "\r\n"
+#define ARRAY_LEN(arr) ((sizeof arr)/(sizeof arr[0]))
 #define DATE_FMT     "%a, %d %b %Y %H:%M:%S GMT"
-#define HTTP_TYPE    "HTTP/1.0"
-#define INT_ERR      "Internal Error"
 #define SERVER_INFO  "sws/1.0"
-#define TEXT         "something something dark side"
-#define PLAIN_STR    "text/plain"
-#define PLAIN_LEN    10
 
-void
-free_response(struct http_response *resp)
-{
-    free(resp->last_modified);
-    free(resp->content_type);
-    free(resp->reason);
-    free(resp);
-}
+typedef struct {
+    int code;
+    const char *text;
+} response_code;
 
-struct http_response *
-create_resp(struct tm *tp, int status, char *reason, char *content, size_t clen)
-{
-    struct http_response *resp;
-
-    if ((resp = malloc(sizeof(struct http_response))) == NULL)
-	err(1, "malloc");
-
-    resp->last_modified = tp;
-    resp->status = status;
-    resp->content = content;
-    resp->reason = strdup(reason);
-    resp->content_length = clen;
-    resp->content_type = strdup("text/plain"); /* For now ? */
-
-    return resp;
-}
-
-void
-respond(int fd, struct http_request *req, struct http_response *resp)
-{
-    time_t now;
-    struct tm *tm_p;
-    char tmbuf[BUFSIZ], lmbuf[BUFSIZ];
-
-    time(&now);
-    tm_p = gmtime(&now);
-    if (strftime(tmbuf, BUFSIZ, DATE_FMT, tm_p) == 0)
-	err(1, "strftime");
-
-    if (resp->last_modified != NULL)
-	if (strftime(lmbuf, BUFSIZ, DATE_FMT, resp->last_modified) == 0)
-	    err(1, "strftime");
-
-    dprintf(fd, "%s %d %s" CRLF, HTTP_TYPE, resp->status, resp->reason);
-    dprintf(fd, "Date: %s" CRLF, tmbuf);
-    dprintf(fd, "Server: %s" CRLF, SERVER_INFO);
-    if (resp->last_modified != NULL)
-    	dprintf(fd, "Last-Modified: %s" CRLF, lmbuf);
-    dprintf(fd, "Content-Type: %s" CRLF, resp->content_type);
-    if ((int)resp->content_length != -1)
-    	dprintf(fd, "Content-Length: %zu" CRLF, resp->content_length);
-    dprintf(fd, "%s", CRLF);
-    if ((req != NULL) && (req->type == GET)) { // NULL when bad_request
-    	dprintf(fd, "%s" CRLF, resp->content);
-    }
-}
-
-/* For when parsing fails and we don't have a request object */
-void
-bad_request(int fd)
-{
-    struct http_response *resp;
-
-    resp = create_resp(NULL, 400, BAD_REQ, BAD_REQ, BAD_REQ_LEN);
-    respond(fd, NULL, resp);
-    free_response(resp);
-}
+const response_code responses[] = {
+    { 200, "OK" },
+    { 400, "Bad Request" },
+    { 403, "Forbidden" },
+    { 404, "Not Found" },
+    { 500, "Internal Server Error" }
+};
 
 void
 internal_error(int fd)
 {
-    struct http_response *resp;
+    respond(fd, &(response){
+        .last_modified = NULL,
+        .content = NULL,
+        .code = 500
+    });
+}
 
-    resp = create_resp(NULL, 500, INT_ERR, INT_ERR, sizeof(INT_ERR));
-    respond(fd, NULL, resp);
-    free_response(resp);
+void
+respond(int fd, response *resp)
+{
+    time_t now;
+    char tmbuf[BUFSIZ], lmbuf[BUFSIZ];
+    const char *reason = "Unknown";
+
+    if (time(&now) == -1)
+        err(1, "time");
+
+    if (strftime(tmbuf, BUFSIZ, DATE_FMT, gmtime(&now)) == 0)
+        err(1, "strftime");
+
+    if (resp->last_modified != NULL)
+        if (strftime(lmbuf, BUFSIZ, DATE_FMT, resp->last_modified) == 0)
+            err(1, "strftime");
+
+    for (unsigned i = 0; i < ARRAY_LEN(responses); ++i)
+        if (resp->code == responses[i].code)
+            reason = responses[i].text;
+
+    dprintf(fd, "HTTP/1.0 %d %s\r\n", resp->code, reason);
+    dprintf(fd, "Date: %s\r\n", tmbuf);
+    dprintf(fd, "Server: %s\r\n", SERVER_INFO);
+    if (resp->last_modified != NULL)
+        dprintf(fd, "Last-Modified: %s\r\n", lmbuf);
+    if (resp->content && resp->content_type)
+        dprintf(fd, "Content-Type: %s\r\n", resp->content_type);
+    dprintf(fd, "Content-Length: %zu\r\n", resp->content ? strlen(resp->content) : 0);
+
+    dprintf(fd, "\r\n");
+
+    if (resp->content)
+        dprintf(fd, "%s", resp->content);
 }
 
 void
 handle_request(int client, struct options *opt,
 	       struct server_info *info, struct http_request *req, char *cwd)
 {
-    struct http_response *resp;
+    response resp;
     char *full, *real, *path, *uri;
     time_t now;
 
     uri = req->uri;
 
-    // resp = create_resp(req->time, -1, NULL, NULL, -1);
-    resp = malloc(sizeof(struct http_response));
-    if (resp == NULL)
-        err(1, "malloc");
-
     if (time(&now) == -1)
         err(1, "time");
 
-    if (((strncmp(uri, CGI_BIN, 8)) == 0) && opt->cgi) {
+    if (((strncmp(uri, "/cgi-bin", 8)) == 0) && opt->cgi) {
         uri += 8;
 
         printf("cgi part ran\n");
@@ -132,14 +100,8 @@ handle_request(int client, struct options *opt,
         path = strdup(info->cgi_dir);
         (void)strncat(path, uri, PATH_MAX - strlen(path) - 1);
 
-        resp = malloc(sizeof(struct http_response));
-        if (resp == NULL)
-            err(1, "malloc");
-
-        cgi(path, resp);
-
+        cgi(path, &resp);
     } else {
-
         full = malloc(strlen(cwd) + 1 + strlen(req->uri));
         if (!full)
             err(1, "malloc");
@@ -149,23 +111,17 @@ handle_request(int client, struct options *opt,
         if (!real) {
             if (errno == ENOENT) {
                 // security vulnerability - leaks the existence of files
-                resp = &(struct http_response){
-                    .last_modified = gmtime(&now),
-                    .content = "",
-                    .content_type = "text/plain",
-                    .reason = "Not Found",
-                    .content_length = 0,
-                    .status = 404
+                resp = (response){
+                    .last_modified = NULL,
+                    .content = NULL,
+                    .code = 404
                 };
             } else {
                 fprintf(stderr, "realpath(%s): %s\n", full, strerror(errno));
-                resp = &(struct http_response){
-                    .last_modified = gmtime(&now),
-                    .content = "",
-                    .content_type = "text/plain",
-                    .reason = "Internal server error",
-                    .content_length = 0,
-                    .status = 500
+                resp = (response){
+                    .last_modified = NULL,
+                    .content = NULL,
+                    .code = 500
                 };
             }
         } else {
@@ -195,7 +151,7 @@ handle_request(int client, struct options *opt,
             free(real);
         }
 
-        respond(client, req, resp);
+        respond(client, &resp);
         return;
     }
 
@@ -213,10 +169,8 @@ handle_request(int client, struct options *opt,
 
     printf("listing path: %s\n", path);
 
-    listing(client, path, req->time, resp);
-    respond(client, req, resp);
+    listing(client, path, req->time, &resp);
+    respond(client, &resp);
 
-    /* call realpath(3)? */
     free(path);
-    free_response(resp);
 }

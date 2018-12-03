@@ -48,7 +48,6 @@ logging(struct options *options,struct server_info *server_info,char *ipport,cha
                 err(1,"could not open log file");
         }
 
-
         if(sprintf(buf,"%s %s %s\n",ipport,time_line,line) < 0)
                 err(1,"sprintf error");
 
@@ -72,9 +71,13 @@ void http(struct options *options,struct server_info * server_info,int fd,char *
 		err(1, "malloc");
 
 	if (parse_request(fd, &req) == -1) {
-	    bad_request(fd);
-	    err(1, "parse_request");
-	}
+	    respond(fd, &(response){
+                    .content = NULL,
+                    .code = 400,
+                    .last_modified = NULL,
+            });
+            return;
+        }
 
 	printf("received : ");
 	switch (req.type) {
@@ -241,8 +244,8 @@ main(int argc,char **argv) {
                 case 0: // child
                     ipport = sockaddr_to_str((struct sockaddr *)&client, clientsz);
                     printf("got connection from %s\n", ipport);
-                    free(ipport);
                     http(&options, &server_info, clientsock, ipport, dir);
+                    free(ipport);
                     break;
 
                 default: // parent
