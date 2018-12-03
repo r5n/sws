@@ -69,19 +69,32 @@ html_footer(char **buf, size_t *bufsz, size_t *buflen)
     *buflen += n;
 }
 
-/* change for NetBSD --> int sz to char *sz */
 void
 write_entry(char **buf, size_t *bufsz, size_t *buflen,
-        char *name, char *tm, int sz, bool isdir)
+	    char *name, char *tm,
+#ifdef __NETBSD	    
+	    char *sz,
+#else
+	    int sz,
+#endif	    
+	    bool isdir)
 {
     int n;
     char tmp[BUFSIZ];
 
+#ifdef __NETBSD    
+    n = snprintf(tmp, BUFSIZ,
+                 "<tr>\n"
+                 "<td><a href=\"%s%s\">%s%s</a></td><td>%s</td><td>%s</td>\n"
+                 "</tr>\n",
+                 name, isdir ? "/" : "", name, isdir ? "/" : "", tm, sz);
+#else
     n = snprintf(tmp, BUFSIZ,
                  "<tr>\n"
                  "<td><a href=\"%s%s\">%s%s</a></td><td>%s</td><td>%d</td>\n"
                  "</tr>\n",
                  name, isdir ? "/" : "", name, isdir ? "/" : "", tm, sz);
+#endif
     if (n < 0)
         err(1, "snprintf");
 
@@ -102,6 +115,9 @@ listing(int fd, char *target, struct http_request *req, response *resp)
     time_t tmod;
     struct tm *tp, *mod;
     char buf[PATH_MAX + 1], fpath[PATH_MAX + 1], tbuf[STRTIME_LEN];
+#ifdef __NETBSD
+    char bufh[HUMANIZE_LEN];
+#endif
     struct stat st;
     size_t size, len;
     char *path;
@@ -154,17 +170,19 @@ listing(int fd, char *target, struct http_request *req, response *resp)
             err(1, "strftime");
         }
 
-    #if 0
+#ifdef __NETBSD
         if ((humanize_number(bufh, HUMANIZE_LEN, (int64_t)st.st_size,
                     suffix, HN_AUTOSCALE,
                     HN_DECIMAL | HN_NOSPACE | HN_B)) == -1) {
             internal_error(fd);
             err(1, "humanize_number");
         }
-    #endif
-
+	write_entry(&resp->content, &size, &len, dirp->d_name,
+		    tbuf, bufh, S_ISDIR(st.st_mode));
+#else
         write_entry(&resp->content, &size, &len, dirp->d_name,
                 tbuf, (int)st.st_size, S_ISDIR(st.st_mode));
+#endif	
     }
     
     html_footer(&resp->content, &size, &len);
