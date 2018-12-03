@@ -52,6 +52,10 @@ respond(int fd, struct http_request *req, response *resp)
     char tmbuf[BUFSIZ], lmbuf[BUFSIZ], *buf;
     const char *reason = "Unknown";
 
+    printf("%d\n%d\n", req->mjr, req->mnr);
+    if ((req->mjr == 0) && (req->mnr == 9))
+	goto simple;
+
     if (resp->content_len == -1 && resp->content != NULL)
         resp->content_len = strlen(resp->content);
 
@@ -80,6 +84,7 @@ respond(int fd, struct http_request *req, response *resp)
 
     dprintf(fd, "\r\n");
 
+simple:    
     if (req->type == GET && resp->content)
         dprintf(fd, "%s", resp->content);
 
@@ -245,34 +250,36 @@ handle_request(int client, struct server_info *info,
         time_t now;
         char *dot, *mime, *firstline;
 
-        if (time(&now) == -1)
-            err(1, "time");
+	if ((req->mjr != 0) && (req->mnr != 9)) {
+	    if (time(&now) == -1)
+		err(1, "time");
 
-        if (strftime(tmbuf, sizeof tmbuf, DATE_FMT, gmtime(&now)) == 0)
-            err(1, "strftime");
+	    if (strftime(tmbuf, sizeof tmbuf, DATE_FMT, gmtime(&now)) == 0)
+		err(1, "strftime");
 
-        if (strftime(lmbuf, sizeof tmbuf, DATE_FMT, gmtime(&st.st_mtime)) == 0)
-            err(1, "strftime");
+	    if (strftime(lmbuf, sizeof tmbuf, DATE_FMT, gmtime(&st.st_mtime)) == 0)
+		err(1, "strftime");
 
-        dprintf(client, "HTTP/1.0 200 OK\r\n");
-        dprintf(client, "Date: %s\r\n", tmbuf);
-        dprintf(client, "Server: %s\r\n", SERVER_INFO);
-        dprintf(client, "Last-Modified: %s\r\n", lmbuf);
+	    dprintf(client, "HTTP/1.0 200 OK\r\n");
+	    dprintf(client, "Date: %s\r\n", tmbuf);
+	    dprintf(client, "Server: %s\r\n", SERVER_INFO);
+	    dprintf(client, "Last-Modified: %s\r\n", lmbuf);
 
-        dot = strrchr(real, '.');
-        mime = "application/octet-stream";
+	    dot = strrchr(real, '.');
+	    mime = "application/octet-stream";
 
-        if (dot) {
-            if (strcmp(dot, ".html") == 0)
-                mime = "text/html";
-            else if (strcmp(dot, ".txt") == 0)
-                mime = "text/plain";
-        }
+	    if (dot) {
+		if (strcmp(dot, ".html") == 0)
+		    mime = "text/html";
+		else if (strcmp(dot, ".txt") == 0)
+		    mime = "text/plain";
+	    }
 
-        dprintf(client, "Content-Type: %s\r\n", mime);
-        dprintf(client, "Content-Length: %lld\r\n", (long long)st.st_size);
+	    dprintf(client, "Content-Type: %s\r\n", mime);
+	    dprintf(client, "Content-Length: %lld\r\n", (long long)st.st_size);
 
-        dprintf(client, "\r\n");
+	    dprintf(client, "\r\n");
+	}
 
         if (req->type == GET) {
             while ((rd = read(file, buf, sizeof buf)) > 0) {
