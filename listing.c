@@ -13,6 +13,7 @@
 
 #include "extern.h"
 
+#define __NETBSD
 #define HUMANIZE_LEN  5
 #define STRTIME_FMT   "%Y-%m-%d %H:%M "
 #define STRTIME_LEN   17
@@ -117,6 +118,7 @@ listing(int fd, char *target, struct http_request *req, response *resp)
     char buf[PATH_MAX + 1], fpath[PATH_MAX + 1], tbuf[STRTIME_LEN];
 #ifdef __NETBSD
     char bufh[HUMANIZE_LEN];
+    //char *suffix;
 #endif
     struct stat st;
     size_t size, len;
@@ -172,9 +174,9 @@ listing(int fd, char *target, struct http_request *req, response *resp)
 
 #ifdef __NETBSD
         if ((humanize_number(bufh, HUMANIZE_LEN, (int64_t)st.st_size,
-                    suffix, HN_AUTOSCALE,
+                    "", HN_AUTOSCALE,
                     HN_DECIMAL | HN_NOSPACE | HN_B)) == -1) {
-            internal_error(fd);
+            internal_error(fd, req);
             err(1, "humanize_number");
         }
 	write_entry(&resp->content, &size, &len, dirp->d_name,
