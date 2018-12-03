@@ -1,5 +1,8 @@
+#include <sys/stat.h>
+
 #include <err.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <libgen.h>
 #include <limits.h>
 #include <stdbool.h>
@@ -33,7 +36,7 @@ internal_error(int fd)
 {
     respond(fd, &(response){
         .last_modified = NULL,
-        .content = NULL,
+        .content = "Internal server error",
         .code = 500
     });
 }
@@ -76,101 +79,148 @@ respond(int fd, response *resp)
 
 void
 handle_request(int client, struct options *opt,
-	       struct server_info *info, struct http_request *req, char *cwd)
+               struct server_info *info, struct http_request *req, char *cwd)
 {
     response resp;
-    char *full, *real, *path, *uri;
-    time_t now;
+    char *full, *real;
+    struct stat st;
+    bool cgi;
+    int file;
 
-    uri = req->uri;
+    // for cgi we want "{info->cgi_dir}/${uri+8}"
+    // otherwise, we want "{info->dir}/{uri}"
 
-    if (time(&now) == -1)
-        err(1, "time");
+    cgi = strncmp(req->uri, "/cgi-bin", 8) == 0 && opt->cgi;
 
-    if (((strncmp(uri, "/cgi-bin", 8)) == 0) && opt->cgi) {
-        uri += 8;
-
-        printf("cgi part ran\n");
-
-        if ((path = malloc(PATH_MAX)) == NULL) {
-            internal_error(client);
+    if (cgi) {
+        full = malloc(strlen(info->cgi_dir) + 1 + strlen(req->uri) - strlen("/cgi-bin"));
+        if (!full)
             err(1, "malloc");
-        }
-
-        path = strdup(info->cgi_dir);
-        (void)strncat(path, uri, PATH_MAX - strlen(path) - 1);
-
-        cgi(path, &resp);
+        sprintf(full, "%s/%s", info->cgi_dir, req->uri + 8);
     } else {
         full = malloc(strlen(cwd) + 1 + strlen(req->uri));
         if (!full)
             err(1, "malloc");
-
         sprintf(full, "%s/%s", cwd, req->uri);
-        real = realpath(full, NULL);
-        if (!real) {
-            if (errno == ENOENT) {
-                // security vulnerability - leaks the existence of files
-                resp = (response){
-                    .last_modified = NULL,
-                    .content = NULL,
-                    .code = 404
-                };
-            } else {
-                fprintf(stderr, "realpath(%s): %s\n", full, strerror(errno));
-                resp = (response){
-                    .last_modified = NULL,
-                    .content = NULL,
-                    .code = 500
-                };
-            }
+    }
+
+    real = realpath(full, NULL);
+    if (!real) {
+        if (errno == ENOENT) {
+            // security vulnerability - leaks the existence of files
+            respond(client, &(response){
+                .last_modified = NULL,
+                .content = "Not found",
+                .code = 404
+            });
+            free(full);
+            return;
         } else {
-            // check that we don't serve files outside the public dir
-            char *parent = real;
-            bool forbidden = false;
+            fprintf(stderr, "realpath(%s): %s\n", full, strerror(errno));
+            internal_error(client);
+            free(full);
+            return;
+        }
+    }
 
-            while (true) {
-                if (strcmp(cwd, parent) == 0)
-                    break; // all good
-                else if (strstr(parent, cwd) == parent)
-                    parent = dirname(parent);
-                else {
-                    forbidden = true;
-                    break;
-                }
-            }
+    // check that we don't serve files outside the public dir
+    char *parent = real;
+    bool forbidden = false;
 
-            if (forbidden) {
-                //const char *response = "HTTP/1.0 403 Forbidden\r\nContent-Length: 0\r\n\r\n";
-                //write(fd, response, strlen(response));
-            } else {
-                //const char *response = "HTTP/1.0 200 Ok\r\nContent-Length: 0\r\n\r\n";
-                //write(fd, response, strlen(response));
-            }
+    while (true) {
+        if (strcmp(cwd, parent) == 0)
+            break; // all good
+        else if (strstr(parent, cwd) == parent)
+            parent = dirname(parent);
+        else {
+            forbidden = true;
+            break;
+        }
+    }
 
-            free(real);
+    if (forbidden) {
+        resp = (response){
+            .last_modified = NULL,
+            .content = "Forbidden",
+            .code = 403
+        };
+        goto end;
+    }
+
+    if (cgi) {
+        do_cgi(real, &resp);
+        goto end;
+    }
+
+    if (stat(real, &st) < 0) {
+        resp = (response){
+            .last_modified = NULL,
+            .content = strerror(errno),
+            .code = 403 // This is probably not always the correct response
+        };
+        goto end;
+    }
+
+    if (S_ISDIR(st.st_mode)) {
+        listing(client, real, req->time, &resp);
+    } else if ((file = open(real, O_RDONLY)) < 0) {
+        char buf[BUFSIZ], tmbuf[BUFSIZ], lmbuf[BUFSIZ];
+        ssize_t rd;
+        time_t now;
+        char *dot, *mime;
+
+        if (time(&now) == -1)
+            err(1, "time");
+
+        if (strftime(tmbuf, sizeof tmbuf, DATE_FMT, gmtime(&now)) == 0)
+            err(1, "strftime");
+
+        if (strftime(lmbuf, sizeof tmbuf, DATE_FMT, gmtime(&st.st_mtime)) == 0)
+            err(1, "strftime");
+
+        dprintf(client, "HTTP/1.0 200 OK\r\n");
+        dprintf(client, "Date: %s\r\n", tmbuf);
+        dprintf(client, "Server: %s\r\n", SERVER_INFO);
+        dprintf(client, "Last-Modified: %s\r\n", lmbuf);
+
+        dot = strrchr(real, '.');
+        mime = "application/octet-stream";
+
+        if (dot) {
+            if (strcmp(dot, ".html") == 0)
+                mime = "text/html";
+            else if (strcmp(dot, ".txt") == 0)
+                mime = "text/plain";
         }
 
-        respond(client, &resp);
+        dprintf(client, "Content-Type: %s\r\n", mime);
+        dprintf(client, "Content-Length: %lld\n", (long long)st.st_size);
+
+        while ((rd = read(file, buf, sizeof buf)) > 0) {
+            if (write(client, buf, rd) < 0) {
+                perror("write");
+                break;
+            }
+        }
+
+        if (rd < 0) {
+            perror("read");
+        }
+
+        free(real);
+        free(full);
         return;
+    } else {
+        perror(real);
+        resp = (response){
+            .last_modified = NULL,
+            .content = strerror(errno),
+            .code = 403
+        };
     }
 
-    /* TODO Check that uri is a regular file or a directory
-     * that contains 'index.html'.  Might be efficient to call
-     * fts_open(3) here and then reuse the result in `listing' */
-
-    /* Need to list out the directory at this point */
-    if ((path = malloc(PATH_MAX)) == NULL) {
-        internal_error(client);
-        err(1, "malloc");
-    }
-    path = strdup(info->dir);
-    (void)strncat(path, uri, PATH_MAX - strlen(path) - 1);
-
-    printf("listing path: %s\n", path);
-
-    listing(client, path, req->time, &resp);
+end:
     respond(client, &resp);
-
-    free(path);
+    free(real);
+    free(full);
 }

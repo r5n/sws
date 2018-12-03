@@ -38,7 +38,7 @@ typedef struct {
 
 int parse_request(int, struct http_request *);
 int parse_args(int, char **,struct options *,struct server_info *);
-void cgi(char *, response *);
+void do_cgi(char *, response *);
 void handle_request(int, struct options *,
                     struct server_info *, struct http_request *, char *);
 void listing(int, char *, struct tm *, response *);
