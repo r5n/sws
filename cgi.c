@@ -9,14 +9,21 @@
 #include "extern.h"
 
 void
-cgi(int fd, char *path)
+cgi(char *path, struct http_response *resp)
 {
-    char buf[BUFSIZ];
+    // char buf[BUFSIZ];
     pid_t pid;
     struct sigaction intsa, quitsa, sa;
     sigset_t nmask, omask;
     int p[2];
     int n;
+    size_t bufsz, buflen;
+
+    bufsz = BUFSIZ;
+    buflen = 0;
+
+    if ((resp->content = calloc(1, bufsz)) == NULL)
+	err(1, "calloc");
 
     sa.sa_handler = SIG_IGN;
     sigemptyset(&sa.sa_mask);
@@ -52,13 +59,35 @@ cgi(int fd, char *path)
     }
     else if (pid > 0) { /* parent */
 	close(p[1]);    /* close write end */
-	while ((n = read(p[0], buf, BUFSIZ)) > 0) {
-	    if ((write(fd, buf, n)) != n)
-		err(1, "write");
+	while (1) {
+	    if ((n = read(p[0], resp->content + buflen, bufsz - buflen)) == 0)
+		break;
+	    if (n < 0) {
+		sigaction(SIGINT, &intsa, NULL);
+		sigaction(SIGQUIT, &quitsa, NULL);
+		(void)sigprocmask(SIG_SETMASK, &omask, NULL);
+		err(1, "read");
+	    }
+	    if ((size_t) n == bufsz - buflen) {
+		bufsz *= 2;
+		if ((resp->content = realloc(resp->content, bufsz)) == NULL) {
+		    sigaction(SIGINT, &intsa, NULL);
+		    sigaction(SIGQUIT, &quitsa, NULL);
+		    (void)sigprocmask(SIG_SETMASK, &omask, NULL);
+		    err(1, "realloc");
+		}
+	    }
+	    buflen += n;
 	}
 	close(p[0]);
 	if (waitpid(pid, NULL, 0) < 0)
 	    err(1, "waitpid");
+
+	resp->content_length = buflen;
+	resp->content_type = strdup("text/html");
+	resp->last_modified = NULL;
+	resp->reason = strdup("OK");
+	resp->status = 200;
 
 	sigaction(SIGINT, &intsa, NULL);
 	sigaction(SIGQUIT, &quitsa, NULL);

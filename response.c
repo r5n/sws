@@ -75,7 +75,6 @@ respond(int fd, struct http_request *req, struct http_response *resp)
     	dprintf(fd, "Content-Length: %zu" CRLF, resp->content_length);
     dprintf(fd, "%s", CRLF);
     if ((req != NULL) && (req->type == GET)) { // NULL when bad_request
-    	printf("printing content\n");
     	dprintf(fd, "%s" CRLF, resp->content);
     }
 }
@@ -110,7 +109,28 @@ handle_request(int client, struct options *opt,
 
     uri = req->uri;
 
-    printf("CGI: %d\n", opt->cgi);
+    if (((strncmp(uri, CGI_BIN, 8)) == 0) && opt->cgi) {
+	uri += 8;
+
+	printf("cgi part ran\n");
+
+	if ((path = malloc(PATH_MAX)) == NULL) {
+	    internal_error(client);
+	    err(1, "malloc");
+	}
+
+	path = strdup(info->cgi_dir);
+	(void)strncat(path, uri, PATH_MAX - strlen(path) - 1);
+
+	resp = malloc(sizeof(struct http_response));
+	if (resp == NULL)
+	    err(1, "malloc");
+
+	cgi(path, resp);
+	respond(client, req, resp);
+	return;
+    }
+    
 
     /* TODO Check that uri is a regular file or a directory
      * that contains 'index.html'.  Might be efficient to call
@@ -127,7 +147,7 @@ handle_request(int client, struct options *opt,
     printf("listing path: %s\n", path);
 
     // resp = create_resp(req->time, -1, NULL, NULL, -1);
-    resp = malloc(sizeof(struct http_request));
+    resp = malloc(sizeof(struct http_response));
     if (resp == NULL)
 	err(1, "malloc");
 
