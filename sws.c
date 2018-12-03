@@ -19,6 +19,10 @@
 
 #include "extern.h"
 
+#define LOG_PERMS 0600
+#define LOG_MODES O_WRONLY | O_APPEND | O_CREAT
+
+int logfd;
 
 char *
 convert_to_string[] = {
@@ -27,9 +31,8 @@ convert_to_string[] = {
 
 // log format: remote_ip time_in_GMT first_line status size_of_the_response
 void
-logging(struct options *options,struct server_info *server_info,char *ipport,char *line)
+logging(struct options *options,char *ipport,char *line)
 {
-        int logfd;
         time_t now;
         char time_line[BUFSIZ];
         char buf[BUFSIZ];
@@ -42,15 +45,11 @@ logging(struct options *options,struct server_info *server_info,char *ipport,cha
                 err(1,"Could not format time");
         }
 
-        if((logfd = open(server_info->logdir,O_WRONLY | O_APPEND | O_CREAT,0666)) == -1){
-                err(1,"could not open log file");
-        }
-
+    
 
         if(sprintf(buf,"%s %s %s\n",ipport,time_line,line) < 0)
                 err(1,"sprintf error");
 
-        printf("%s %s %s\n",ipport,time_line,line);
 
         if(options->debug)
                 printf("%s",buf);
@@ -59,14 +58,13 @@ logging(struct options *options,struct server_info *server_info,char *ipport,cha
                         err(1,"Could not write %s to file:",line);
         }
 
-        (void)close(logfd);
 }
 
 
 
 
 
-void http(struct options *options,struct server_info * server_info,int fd,char * ipport) 
+void http(struct options *options,int fd,char * ipport) 
 {
 	struct http_request req;
 	char reqstring[BUFSIZ];
@@ -101,7 +99,7 @@ void http(struct options *options,struct server_info * server_info,int fd,char *
                 printf(" since: %s\n", asctime(req.time));
         else
                 printf("\n");
-        logging(options,server_info,ipport,reqstring);
+        logging(options,ipport,reqstring);
 }
 
 char *sockaddr_to_str(struct sockaddr *addr, socklen_t addrlen) {
@@ -166,6 +164,12 @@ main(int argc,char **argv) {
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE | AI_NUMERICHOST | AI_NUMERICSERV;
 
+
+	if((logfd = open(server_info.logdir,LOG_MODES,LOG_PERMS)) == -1){
+                err(1,"could not open log file");
+        }
+
+
 	if ((status = getaddrinfo(host, port, &hints, &res)) != 0)
 		errx(1, "getaddrinfo([%s], [%s]): %s", host, port, gai_strerror(status));
 
@@ -228,7 +232,7 @@ main(int argc,char **argv) {
 					ipport = sockaddr_to_str((struct sockaddr *)&client, clientsz);
 					printf("got connection from %s\n", ipport);
 					free(ipport);
-					http(&options,&server_info,clientsock,ipport);
+					http(&options,clientsock,ipport);
 					break;
 				default: // parent
 					printf("accepted\n");
@@ -236,6 +240,9 @@ main(int argc,char **argv) {
 			}
 		}
 	}
+
+	(void)close(logfd);
+	
 	if (status < 0)
 		err(1, "poll");
 

@@ -10,11 +10,7 @@
 #include "extern.h"
 
 #define BAD_REQ      "Bad Request"
-#define INT_SRV_ERR  "Internal Server Error"
-#define INT_SRV_ERR_LEN 21
 #define BAD_REQ_LEN  11
-#define FRBDN_ERR    "Forbidden"
-#define FRBDN_ERR_LEN 9
 #define CRLF         "\r\n"
 #define DATE_FMT     "%a, %d %b %Y %H:%M:%S GMT"
 #define HTTP_TYPE    "HTTP/1.0"
@@ -95,77 +91,5 @@ write_bad_request(int fd)
 
     resp_header(fd, resp);
     dprintf(fd, "%s" CRLF, BAD_REQ);   /* For now */
-    free_response(resp);
-}
-
-void
-write_server_error(int fd)
-{
-    struct http_response *resp;
-    time_t now;
-    struct tm *tm_p;
-    
-    time(&now);
-    tm_p = gmtime(&now);
-
-    /* Do we need last_modified? */
-    if ((resp = malloc(sizeof(struct http_response))) == NULL)
-	err(1, "malloc");
-    
-    resp->last_modified = tm_p;
-    resp->status = 500;
-    resp->content_length = strlen(INT_SRV_ERR);
-
-    if ((resp->content_type = malloc(PLAIN_LEN+1)) == NULL)
-	err(1, "malloc");
-    
-    (void)strncpy(resp->content_type, "text/plain", PLAIN_LEN);
-
-    resp->content_type[PLAIN_LEN+1] = '\0';
-
-    if ((resp->reason = malloc(INT_SRV_ERR_LEN+1)) == NULL)
-	err(1, "malloc");
-
-    (void)strncpy(resp->reason, INT_SRV_ERR, INT_SRV_ERR_LEN);
-    resp->reason[INT_SRV_ERR_LEN+1] = '\0';
-
-    resp_header(fd, resp);
-    dprintf(fd, "%s" CRLF, INT_SRV_ERR);   /* For now */
-    free_response(resp);
-}
-
-void
-write_forbidden_error(int fd)
-{
-    struct http_response *resp;
-    time_t now;
-    struct tm *tm_p;
-    
-    time(&now);
-    tm_p = gmtime(&now);
-
-    /* Do we need last_modified? */
-    if ((resp = malloc(sizeof(struct http_response))) == NULL)
-	err(1, "malloc");
-    
-    resp->last_modified = tm_p;
-    resp->status = 403;
-    resp->content_length = strlen(FRBDN_ERR);
-
-    if ((resp->content_type = malloc(PLAIN_LEN+1)) == NULL)
-	err(1, "malloc");
-    
-    (void)strncpy(resp->content_type, "text/plain", PLAIN_LEN);
-
-    resp->content_type[PLAIN_LEN+1] = '\0';
-
-    if ((resp->reason = malloc(FRBDN_ERR_LEN+1)) == NULL)
-	err(1, "malloc");
-
-    (void)strncpy(resp->reason, FRBDN_ERR, FRBDN_ERR_LEN);
-    resp->reason[FRBDN_ERR_LEN+1] = '\0';
-
-    resp_header(fd, resp);
-    dprintf(fd, "%s" CRLF, FRBDN_ERR);   /* For now */
     free_response(resp);
 }
