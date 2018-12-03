@@ -132,6 +132,9 @@ parse_header(struct http_request *req, char *buf, char *crlf)
 
 	req->if_modified = 1;
 
+	if ((req->time = malloc(sizeof(struct tm))) == NULL)
+	    err(1, "malloc");
+
 	buf = &sep[2];
 
 	if ((chr = strptime(buf, RFC1123DATE, req->time)) != NULL) {
