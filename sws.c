@@ -48,7 +48,7 @@ logging(struct http_request *req, char *line, response *resp)
                 err(1, "time");
         time_struct = gmtime(&now);
 
-        if ((ip = inet_ntop(req->addr->sa_family, req->addr, buf, *req->addrlen)) == NULL) 
+        if ((ip = inet_ntop(req->addr->sa_family, req->addr, buf, req->addrlen)) == NULL)
             err(1, "inet_pton");
 
         if(strftime(time_line,BUFSIZ,"%d/%b/%Y:%T:%z",time_struct) == 0){
@@ -68,7 +68,7 @@ logging(struct http_request *req, char *line, response *resp)
 }
 
 void http(int fd, char *cwd,
-          struct sockaddr *addr, socklen_t *addrlen)
+          struct sockaddr *addr, socklen_t addrlen)
 {
     struct http_request req;
 
@@ -226,7 +226,7 @@ main(int argc,char **argv) {
 
                 case 0: // child
                     http(clientsock, dir,
-                         (struct sockaddr*)&client, &clientsz);
+                         (struct sockaddr*)&client, clientsz);
                     break;
 
                 default: // parent

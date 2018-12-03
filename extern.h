@@ -21,7 +21,7 @@ struct http_request {
     int mjr;
     int mnr;
     struct sockaddr *addr;
-    socklen_t *addrlen;
+    socklen_t addrlen;
 };
 
 typedef struct {
