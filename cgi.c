@@ -1,4 +1,8 @@
+#include <arpa/inet.h>
+#include <sys/socket.h>
 #include <sys/wait.h>
+
+#include <netinet/in.h>
 
 #include <err.h>
 #include <errno.h>
@@ -10,7 +14,8 @@
 
 #include "extern.h"
 
-#define ENV_SZ 50
+#define ENV_SZ    50
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 char *
 build_kv(const char *key, const char *value)
@@ -30,20 +35,31 @@ char **
 make_cgienv(char *script, struct server_info *info, struct http_request *req)
 {
     char **env;
+    char ip[MAX(INET_ADDRSTRLEN, INET6_ADDRSTRLEN)] = {0};    
     int n;
 
     n = 0;
 
     if ((env = calloc(ENV_SZ, sizeof(char *))) == NULL)
 	return 0;
-    
-    env[n++] = build_kv("REQUEST_URI", req->uri);
+
     env[n++] = build_kv("PATH", info->cgi_dir);
-    env[n++] = build_kv("SERVER_ADMIN", "sws@stevens.edu");
-    env[n++] = build_kv("SCRIPT_NAME", script);
+    if (req->addr->sa_family == AF_INET) {
+	if (inet_ntop(AF_INET, &((struct sockaddr_in*)req->addr)->sin_addr,
+		      ip, sizeof(ip)) == NULL)
+	    err(1, "inet_ntop");
+    } else {
+	if (inet_ntop(AF_INET6, &((struct sockaddr_in6*)req->addr)->sin6_addr,
+		      ip, sizeof(ip)) == NULL)
+	    err(1, "inet_ntop");
+    }
+    env[n++] = build_kv("QUERY_STRING", req->uri);
+    env[n++] = build_kv("REMOTE_ADDR", ip);
     env[n++] = build_kv("REQUEST_METHOD", req->type == GET ? "GET" : "HEAD");
-    env[n++] = build_kv("SERVER_PROTOCOL", "HTTP/1.0");
+    env[n++] = build_kv("SCRIPT_NAME", script);
+    env[n++] = build_kv("SERVER_ADMIN", "sws@stevens.edu");
     env[n++] = build_kv("SERVER_PORT", info->port);
+    env[n++] = build_kv("SERVER_PROTOCOL", "HTTP/1.0");
     env[n++] = build_kv("SERVER_SOFTWARE", "sws/1.0");
 
     return env;
