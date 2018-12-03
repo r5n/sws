@@ -38,6 +38,7 @@ internal_error(int fd, struct http_request *req)
     respond(fd, req, &(response){
         .last_modified = NULL,
         .content = "Internal server error",
+        .content_len = -1,
         .code = 500
     });
 }
@@ -49,6 +50,8 @@ respond(int fd, struct http_request *req, response *resp)
     char tmbuf[BUFSIZ], lmbuf[BUFSIZ], *buf;
     const char *reason = "Unknown";
 
+    if (resp->content_len == -1 && resp->content != NULL)
+        resp->content_len = strlen(resp->content);
 
     if (time(&now) == -1)
         err(1, "time");
@@ -71,7 +74,7 @@ respond(int fd, struct http_request *req, response *resp)
         dprintf(fd, "Last-Modified: %s\r\n", lmbuf);
     if (resp->content && resp->content_type)
         dprintf(fd, "Content-Type: %s\r\n", resp->content_type);
-    dprintf(fd, "Content-Length: %zu\r\n", resp->content ? strlen(resp->content) : 0);
+    dprintf(fd, "Content-Length: %lld\r\n", resp->content_len);
 
     dprintf(fd, "\r\n");
 
@@ -121,6 +124,7 @@ struct http_request *req, char *cwd)
             respond(client, req, &(response){
                 .last_modified = NULL,
                 .content = "Not found",
+                .content_len = -1,
                 .code = 404
             });
             free(full);
@@ -152,6 +156,7 @@ struct http_request *req, char *cwd)
         resp = (response){
             .last_modified = NULL,
             .content = "Forbidden",
+            .content_len = -1,
             .code = 403
         };
         goto end;
@@ -166,6 +171,7 @@ struct http_request *req, char *cwd)
         resp = (response){
             .last_modified = NULL,
             .content = strerror(errno),
+            .content_len = -1,
             .code = 403 // This is probably not always the correct response
         };
         goto end;
@@ -177,7 +183,7 @@ struct http_request *req, char *cwd)
         char buf[BUFSIZ], tmbuf[BUFSIZ], lmbuf[BUFSIZ];
         ssize_t rd;
         time_t now;
-        char *dot, *mime;
+        char *dot, *mime, *firstline;
 
         if (time(&now) == -1)
             err(1, "time");
@@ -219,7 +225,16 @@ struct http_request *req, char *cwd)
             perror("read");
         }
         
-        // TODO log
+        if ((firstline = calloc(5 + strlen(req->uri) + 9 + 1, 1)) == NULL)
+            err(1, "calloc");
+
+        sprintf(firstline, "%s %s HTTP/%d.%d",
+            convert_to_string[req->type], req->uri, req->mjr, req->mnr);
+
+        logging(req, firstline, &(response) {
+            .code = 200,
+            .content_len = (long long)st.st_size
+        });
 
         free(real);
         free(full);

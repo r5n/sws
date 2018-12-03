@@ -170,6 +170,7 @@ listing(int fd, char *target, struct http_request *req, response *resp)
     html_footer(&resp->content, &size, &len);
 
     resp->content_type = "text/html";
+    resp->content_len = -1;
     resp->code = 200;
     resp->last_modified = NULL;
 
