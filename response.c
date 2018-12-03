@@ -1,5 +1,6 @@
 #include <err.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,7 @@
 
 #define BAD_REQ      "Bad Request"
 #define BAD_REQ_LEN  11
+#define CGI_BIN      "/cgi-bin"
 #define CRLF         "\r\n"
 #define DATE_FMT     "%a, %d %b %Y %H:%M:%S GMT"
 #define HTTP_TYPE    "HTTP/1.0"
@@ -84,4 +86,27 @@ write_bad_request(int fd)
     resp_header(fd, resp);
     dprintf(fd, "%s" CRLF, BAD_REQ);   /* For now */
     free_response(resp);
+}
+
+void
+handle_request(int client, struct server_info *info,
+	       struct http_request *req)
+{
+    char *uri, *path;
+
+    printf("ran\n");
+
+    uri = req->uri;
+    if ((strncmp(uri, CGI_BIN, 8)) == 0) {
+	uri += 8;
+
+	if ((path = malloc(PATH_MAX)) == NULL)
+	    err(1, "malloc"); /* send 500 response */
+
+	path = strdup(info->cgi_dir);
+
+	(void)strncat(path, uri, PATH_MAX - strlen(path) - 1);
+	printf("path : %s\n", path);
+	cgi(client, path);
+    }
 }

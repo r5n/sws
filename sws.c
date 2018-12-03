@@ -1,5 +1,6 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 
 #include <netinet/in.h>
@@ -35,6 +36,7 @@ logging(struct options *options,struct server_info *server_info,char *ipport,cha
         char buf[BUFSIZ];
         struct tm *time_struct;
 
+
         time(&now);
         time_struct = gmtime(&now);
 
@@ -43,6 +45,7 @@ logging(struct options *options,struct server_info *server_info,char *ipport,cha
         }
 
         if((logfd = open(server_info->logdir,O_WRONLY | O_APPEND | O_CREAT,0666)) == -1){
+	    return;
                 err(1,"could not open log file");
         }
 
@@ -102,6 +105,7 @@ void http(struct options *options,struct server_info * server_info,int fd,char *
         else
                 printf("\n");
         logging(options,server_info,ipport,reqstring);
+	handle_request(fd, server_info, &req);
 }
 
 char *sockaddr_to_str(struct sockaddr *addr, socklen_t addrlen) {
@@ -242,7 +246,7 @@ main(int argc,char **argv) {
                     ipport = sockaddr_to_str((struct sockaddr *)&client, clientsz);
                     printf("got connection from %s\n", ipport);
                     free(ipport);
-                    http(clientsock);
+                    http(&options, &server_info, clientsock, ipport);
                     break;
 
                 default: // parent
