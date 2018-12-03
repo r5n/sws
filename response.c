@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <libgen.h>
 #include <limits.h>
+#include <pwd.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -92,24 +93,58 @@ respond(int fd, struct http_request *req, response *resp)
 
 void
 handle_request(int client, struct server_info *info,
-struct http_request *req, char *cwd)
+               struct http_request *req, char *cwd)
 {
     response resp;
-    char *full, *real;
+    struct passwd *pw;
+    char *full, *real, *home, *start, *end, *username;
     struct stat st;
-    bool cgi;
+    long ulen;
     int file;
+    bool cgi, homedir;
+
+    home = NULL;
 
     // for cgi we want "{info->cgi_dir}/${uri+8}"
     // otherwise, we want "{info->dir}/{uri}"
 
     cgi = strncmp(req->uri, "/cgi-bin", 8) == 0 && info->cgi_dir;
+    homedir = strncmp(req->uri, "/~", 2) == 0;
 
     if (cgi) {
         full = malloc(strlen(info->cgi_dir) + 1 + strlen(req->uri) - strlen("/cgi-bin"));
         if (!full)
             err(1, "malloc");
         sprintf(full, "%s/%s", info->cgi_dir, req->uri + 8);
+    } else if (homedir) {
+        start = req->uri + 2;
+        end = strchr(start, '/');
+        if (!end)
+            end = start + strlen(start) - 1;
+        if (*end == '/')
+            end--;
+        ulen = end - start + 1;
+        username = strndup(start, ulen);
+
+        pw = getpwnam(username);
+        if (!pw) {
+            respond(client, req, &(response){
+                .last_modified = NULL,
+                .content = "Not Found",
+                .content_len = -1,
+                .code = 404
+            });
+            return;
+        }
+
+        if (asprintf(&home, "%s/sws", pw->pw_dir) == -1)
+            err(1, "asprintf");
+        cwd = home;
+
+        if (asprintf(&full, "%s/%s", home, req->uri + 2 + ulen + 1) == -1)
+            err(1, "asprintf");
+
+        free(username);
     } else {
         full = malloc(strlen(cwd) + 1 + strlen(req->uri));
         if (!full)
@@ -251,6 +286,7 @@ struct http_request *req, char *cwd)
 
 end:
     respond(client, req, &resp);
+    free(home);
     free(real);
     free(full);
 }
