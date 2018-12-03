@@ -1,3 +1,5 @@
+#include <sys/wait.h>
+
 #include <err.h>
 #include <errno.h>
 #include <signal.h>
@@ -9,7 +11,7 @@
 #include "extern.h"
 
 void
-cgi(char *path, struct http_response *resp)
+do_cgi(char *path, response *resp)
 {
     // char buf[BUFSIZ];
     pid_t pid;
@@ -83,11 +85,9 @@ cgi(char *path, struct http_response *resp)
 	if (waitpid(pid, NULL, 0) < 0)
 	    err(1, "waitpid");
 
-	resp->content_length = buflen;
-	resp->content_type = strdup("text/html");
+	resp->content_type = "text/html";
 	resp->last_modified = NULL;
-	resp->reason = strdup("OK");
-	resp->status = 200;
+	resp->code = 200;
 
 	sigaction(SIGINT, &intsa, NULL);
 	sigaction(SIGQUIT, &quitsa, NULL);

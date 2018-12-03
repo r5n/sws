@@ -44,19 +44,19 @@ html_header(char **buf, size_t *bufsz, size_t *buflen, char *path)
     char tmp[BUFSIZ];
 
     n = snprintf(tmp, BUFSIZ,
-		 "<!DOCTYPE HTML>\n"
-		 "<html>\n<head><title>Index of %s</title></head>\n"
-		 "<body>\n<h1>Index of %s</h1>\n<table>\n"
-		 "<tr><td><b>Name</b></td><td><b>Last Modified</b></td>"
-		 "<td><b>Size</b></td>",
-		 path, path);
+         "<!DOCTYPE HTML>\n"
+         "<html>\n<head><title>Index of %s</title></head>\n"
+         "<body>\n<h1>Index of %s</h1>\n<table>\n"
+         "<tr><td><b>Name</b></td><td><b>Last Modified</b></td>"
+         "<td><b>Size</b></td>",
+         path, path);
     if (n < 0)
-	err(1, "snprintf");
+    err(1, "snprintf");
 
     while (n >= (int)(*bufsz - *buflen)) {
-	*bufsz *= 2;
-	if ((*buf = realloc(*buf, *bufsz)) == NULL)
-	    err(1, "realloc");
+    *bufsz *= 2;
+    if ((*buf = realloc(*buf, *bufsz)) == NULL)
+        err(1, "realloc");
     }
     (void)strncpy(*buf+(*buflen), tmp, n);
     *buflen += n;
@@ -70,12 +70,12 @@ html_footer(char **buf, size_t *bufsz, size_t *buflen)
 
     n = snprintf(tmp, BUFSIZ, "\n</table>\n</body>\n</html>\n");
     if (n < 0)
-	err(1, "snprintf");
+    err(1, "snprintf");
 
     while (n >= (int)(*bufsz - *buflen)) {
-	*bufsz *= 2;
-	if ((*buf = realloc(*buf, *bufsz)) == NULL)
-	    err(1, "realloc");
+    *bufsz *= 2;
+    if ((*buf = realloc(*buf, *bufsz)) == NULL)
+        err(1, "realloc");
     }
     (void)strncpy(*buf+(*buflen), tmp, n);
     *buflen += n;
@@ -84,19 +84,19 @@ html_footer(char **buf, size_t *bufsz, size_t *buflen)
 /* change for NetBSD --> int sz to char *sz */
 void
 write_entry(char **buf, size_t *bufsz, size_t *buflen,
-	    char *name, char *tm, int sz)
+        char *name, char *tm, int sz)
 {
     int n;
     char tmp[BUFSIZ];
 
     n = snprintf(tmp, BUFSIZ, ENT_FORMAT, name, tm, sz);
     if (n < 0)
-	err(1, "snprintf");
+    err(1, "snprintf");
     
     while (n >= (int)(*bufsz - *buflen)) {
-	*bufsz *= 2;
-	if ((*buf = realloc(*buf, *bufsz)) == NULL)
-	    err(1, "realloc");
+    *bufsz *= 2;
+    if ((*buf = realloc(*buf, *bufsz)) == NULL)
+        err(1, "realloc");
     }
     (void)strncpy(*buf+(*buflen), tmp, n); // don't copy '\0'
     *buflen += n;
@@ -188,9 +188,8 @@ listing(int fd, char *target, struct http_request *req, struct http_response *re
 	free(path);  // free strdup call
 
     resp->content_length = len;
-    resp->content_type = strdup("text/html");
-    resp->reason = strdup("OK");
-    resp->status = 200;
+    resp->content_type = "text/html";
+    resp->code = 200;
     resp->last_modified = NULL;
 
     (void)closedir(dp);
