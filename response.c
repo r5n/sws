@@ -80,7 +80,7 @@ respond(int fd, struct http_request *req, response *resp)
 
     dprintf(fd, "\r\n");
 
-    if (resp->content)
+    if (req->type == GET && resp->content)
         dprintf(fd, "%s", resp->content);
 
     if ((buf = calloc(5 + strlen(req->uri) + 9 + 1, 1)) == NULL)
@@ -274,17 +274,19 @@ handle_request(int client, struct server_info *info,
 
         dprintf(client, "\r\n");
 
-        while ((rd = read(file, buf, sizeof buf)) > 0) {
-            if (write(client, buf, rd) < 0) {
-                perror("write");
-                break;
+        if (req->type == GET) {
+            while ((rd = read(file, buf, sizeof buf)) > 0) {
+                if (write(client, buf, rd) < 0) {
+                    perror("write");
+                    break;
+                }
+            }
+
+            if (rd < 0) {
+                perror("read");
             }
         }
 
-        if (rd < 0) {
-            perror("read");
-        }
-        
         if ((firstline = calloc(5 + strlen(req->uri) + 9 + 1, 1)) == NULL)
             err(1, "calloc");
 
