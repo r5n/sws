@@ -42,9 +42,11 @@ html_header(char **buf, size_t *bufsz, size_t *buflen, char *path)
     char tmp[BUFSIZ];
 
     n = snprintf(tmp, BUFSIZ,
-		 "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2 FINAL//EN\">\n"
+		 "<!DOCTYPE HTML>\n"
 		 "<html>\n<head><title>Index of %s</title></head>\n"
-		 "<body>\n<h1>Index of %s</h1>\n<table>\n",
+		 "<body>\n<h1>Index of %s</h1>\n<table>\n"
+		 "<tr><td><b>Name</b></td><td><b>Last Modified</b></td>"
+		 "<td><b>Size</b></td>",
 		 path, path);
     if (n < 0)
 	err(1, "snprintf");
