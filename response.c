@@ -3,6 +3,7 @@
 
 #include <err.h>
 #include <errno.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <libgen.h>
 #include <limits.h>
@@ -97,13 +98,13 @@ handle_request(int client, struct server_info *info,
 {
     response resp;
     struct passwd *pw;
-    char *full, *real, *home, *start, *end, *username;
+    char *full, *real, *home, *start, *end, *username, *indexhtml;
     struct stat st;
     long ulen;
     int file;
     bool cgi, homedir;
 
-    home = NULL;
+    home = full = indexhtml = NULL;
 
     // for cgi we want "{info->cgi_dir}/${uri+8}"
     // otherwise, we want "{info->dir}/{uri}"
@@ -213,8 +214,32 @@ handle_request(int client, struct server_info *info,
     }
 
     if (S_ISDIR(st.st_mode)) {
-        listing(client, real, req, &resp);
-    } else if ((file = open(real, O_RDONLY)) >= 0) {
+        if (asprintf(&indexhtml, "%s/index.html", real) == -1)
+            err(1, "asprintf");
+
+        // TOCTOU issue
+        if (access(indexhtml, O_RDONLY) == 0) {
+            char *old = real;
+            real = indexhtml;
+            free(old);
+
+            // need to re-call stat() for index.html
+            if (stat(real, &st) < 0) {
+                resp = (response){
+                    .last_modified = NULL,
+                    .content = strerror(errno),
+                    .content_len = -1,
+                    .code = 403 // This is probably not always the correct response
+                };
+                goto end;
+            }
+        } else {
+            listing(client, real, req, &resp);
+            goto end;
+        }
+    }
+
+    if ((file = open(real, O_RDONLY)) >= 0) {
         char buf[BUFSIZ], tmbuf[BUFSIZ], lmbuf[BUFSIZ];
         ssize_t rd;
         time_t now;
@@ -286,6 +311,7 @@ handle_request(int client, struct server_info *info,
 
 end:
     respond(client, req, &resp);
+    free(indexhtml);
     free(home);
     free(real);
     free(full);
