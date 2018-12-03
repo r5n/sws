@@ -1,8 +1,10 @@
 #include <sys/stat.h>
 
+#include <dirent.h>
 #include <err.h>
 #include <errno.h>
 #include <fts.h>
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -103,72 +105,72 @@ write_entry(char **buf, size_t *bufsz, size_t *buflen,
 void
 listing(int fd, char *path, struct tm *mod, struct http_response *resp)
 {
-    FTS *fp;
-    FTSENT *entp, *chlp;
-    struct stat *st;
+    DIR *dp;
+    struct dirent *dirp;
     time_t tmod;
     struct tm *tp;
-    char *dir[2];
-    // char bufh[HUMANIZE_LEN];     /* NetBSD */
-    char buft[STRTIME_LEN];
+    char buf[PATH_MAX + 1], fpath[PATH_MAX + 1], tbuf[STRTIME_LEN];
+    struct stat st;
     size_t size, len;
-    // char *suffix;                /* NetBSD */
 
     size = BUFSIZ;
     len = 0;
+
+    if (mod != NULL)
+	tmod = mktime(mod);
+
+    if ((dp = opendir(path)) == NULL)
+	err(1, "opendir"); // send response to client
 
     if ((resp->content = calloc(size, 1)) == NULL) {
 	internal_error(fd);
 	err(1, "calloc");
     }
-    
-    dir[0] = path;
-    dir[1] = NULL;
-
-    if (mod != NULL)
-	tmod = mktime(mod);
-
-    if ((fp = fts_open(dir, FTS_OPTIONS, cmpfn)) == NULL) {
-	err(1, "fts_open");
-    }
-
-    if ((entp = fts_read(fp)) == NULL)
-	err(1, "fts_read");
-
-    if ((chlp = fts_children(fp, 0)) == NULL)
-	err(1, "fts_children");
 
     html_header(&resp->content, &size, &len, path);
 
-    for (; chlp != NULL; chlp = chlp->fts_link) {
-	st = chlp->fts_statp;
+    for (;;) {
+	if ((dirp = readdir(dp)) == NULL)
+	    break;
 
-	if ((chlp->fts_name[0] == '.') ||
-	    (mod != NULL && (difftime(st->st_mtime, tmod) > 0)))
+	if (strncmp(dirp->d_name, ".", 1) == 0)
 	    continue;
 
-	tp = gmtime(&(st->st_mtime));
+	(void)snprintf(buf, PATH_MAX, "%s/%s", path, dirp->d_name);
+	(void)realpath(buf, fpath);
+	// printf("fpath buf : %s\n", fpath);
+	
+	if ((stat(fpath, &st)) == -1)
+	    err(1, "stat");
+
+	if (mod != NULL)
+	    if (difftime(st.st_mtime, tmod) < 0)
+		continue;
+
+	tp = gmtime(&st.st_mtime);
 	if (tp == NULL) {
 	    internal_error(fd);
 	    err(1, "gmtime");
 	}
 
-	if (strftime(buft, sizeof(buft), "%Y-%m-%d %H:%M", tp) == 0)
+	if (strftime(tbuf, sizeof(buf), "%Y-%m-%d %H:%M", tp) == 0) {
+	    internal_error(fd);
 	    err(1, "strftime");
+	}
 
-#if 0   /* NetBSD */
-	if ((humanize_number(bufh, HUMANIZE_LEN, (int64_t)st->st_size,
-			     suffix, HN_AUTOSCALE,
+#if 0
+	if ((humanize_number(bufh, HUMANIZE_LEN, (int64_t)st.st_size,
+			    suffix, HN_AUTOSCALE,
 			     HN_DECIMAL | HN_NOSPACE | HN_B)) == -1) {
 	    internal_error(fd);
 	    err(1, "humanize_number");
 	}
 #endif
 
-	write_entry(&resp->content, &size, &len,
-		    chlp->fts_name, buft, (int)st->st_size);
+	write_entry(&resp->content, &size, &len, dirp->d_name,
+		    tbuf, (int)st.st_size);
     }
-
+    
     html_footer(&resp->content, &size, &len);
 
     resp->content_length = len;
@@ -176,4 +178,6 @@ listing(int fd, char *path, struct tm *mod, struct http_response *resp)
     resp->reason = strdup("OK");
     resp->status = 200;
     resp->last_modified = NULL;
+
+    (void)closedir(dp);
 }

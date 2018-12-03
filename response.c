@@ -71,10 +71,9 @@ respond(int fd, struct http_request *req, struct http_response *resp)
     if (resp->last_modified != NULL)
     	dprintf(fd, "Last-Modified: %s" CRLF, lmbuf);
     dprintf(fd, "Content-Type: %s" CRLF, resp->content_type);
-    if ((int)resp->content_length != -1)
-    	dprintf(fd, "Content-Length: %zu" CRLF, resp->content_length);
+    dprintf(fd, "Content-Length: %zu" CRLF, resp->content_length);
     dprintf(fd, "%s", CRLF);
-    if ((req != NULL) && (req->type == GET)) { // NULL when bad_request
+    if ((req == NULL) || (req->type == GET)) { // NULL when bad_request
     	dprintf(fd, "%s" CRLF, resp->content);
     }
 }
@@ -112,8 +111,6 @@ handle_request(int client, struct options *opt,
     if (((strncmp(uri, CGI_BIN, 8)) == 0) && opt->cgi) {
 	uri += 8;
 
-	printf("cgi part ran\n");
-
 	if ((path = malloc(PATH_MAX)) == NULL) {
 	    internal_error(client);
 	    err(1, "malloc");
@@ -128,6 +125,10 @@ handle_request(int client, struct options *opt,
 
 	cgi(path, resp);
 	respond(client, req, resp);
+
+	free(path);
+	free(resp->content);
+	free_response(resp);
 	return;
     }
     
@@ -144,7 +145,7 @@ handle_request(int client, struct options *opt,
     path = strdup(info->dir);
     (void)strncat(path, uri, PATH_MAX - strlen(path) - 1);
 
-    printf("listing path: %s\n", path);
+    // printf("listing path: %s\n", path);
 
     // resp = create_resp(req->time, -1, NULL, NULL, -1);
     resp = malloc(sizeof(struct http_response));
@@ -154,7 +155,7 @@ handle_request(int client, struct options *opt,
     listing(client, path, req->time, resp);
     respond(client, req, resp);
 
-    /* call realpath(3)? */
     free(path);
+    free(resp->content);
     free_response(resp);
 }
