@@ -88,6 +88,7 @@ void http(int fd, char *cwd,
     if (parse_request(fd, &req) == -1) {
         respond(fd, &req, &(response){
                 .content = NULL,
+                .content_len = 0,
                 .code = 400,
                 .last_modified = NULL,
         });

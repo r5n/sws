@@ -244,6 +244,7 @@ struct http_request *req, char *cwd)
         resp = (response){
             .last_modified = NULL,
             .content = strerror(errno),
+            .content_len = -1,
             .code = 403
         };
     }
