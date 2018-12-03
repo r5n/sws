@@ -10,8 +10,62 @@
 
 #include "extern.h"
 
+#define ENV_SZ 50
+
+char *
+build_kv(const char *key, const char *value)
+{
+    char buf[BUFSIZ];
+    char *kv;
+
+    if ((strlen(key) + strlen(value)) > BUFSIZ)
+	return NULL;
+
+    (void)snprintf(buf, BUFSIZ, "%s=%s", key, value);
+    kv = strdup(buf);
+    return kv;
+}
+
+char **
+make_cgienv(char *script, struct server_info *info, struct http_request *req)
+{
+    char **env;
+    int n;
+
+    n = 0;
+
+    if ((env = calloc(ENV_SZ, sizeof(char *))) == NULL)
+	return 0;
+    
+    env[n++] = build_kv("REQUEST_URI", req->uri);
+    env[n++] = build_kv("PATH", info->cgi_dir);
+    env[n++] = build_kv("SERVER_ADMIN", "sws@stevens.edu");
+    env[n++] = build_kv("SCRIPT_NAME", script);
+    env[n++] = build_kv("REQUEST_METHOD", req->type == GET ? "GET" : "HEAD");
+    env[n++] = build_kv("SERVER_PROTOCOL", "HTTP/1.0");
+    env[n++] = build_kv("SERVER_PORT", info->port);
+    env[n++] = build_kv("SERVER_SOFTWARE", "sws/1.0");
+
+    return env;
+}
+
 void
-do_cgi(char *path, response *resp)
+free_cgienv(char **env)
+{
+    int n;
+
+    n = 0;
+    while (env[n] != (char *)0) {
+	free(env[n]);
+	n++;
+    }
+    free(env);
+}
+
+
+void
+do_cgi(char *path, struct server_info *info,
+       struct http_request *req, response *resp)
 {
     // char buf[BUFSIZ];
     pid_t pid;
@@ -20,6 +74,7 @@ do_cgi(char *path, response *resp)
     int p[2];
     int n;
     size_t bufsz, buflen;
+    char **envp;
 
     bufsz = BUFSIZ;
     buflen = 0;
@@ -99,9 +154,12 @@ do_cgi(char *path, response *resp)
 	if (dup2(p[1], STDOUT_FILENO) != STDOUT_FILENO)
 	    err(1, "dup2 to stdout");
 
-	execlp(path, "", (char *) 0);
-	err(1, "execlp");
+	envp = make_cgienv(path, info, req);
+	
+	execle(path, "", NULL, envp);
+	err(1, "execle");
     }
+    free_cgienv(envp);
     sigaction(SIGINT, &intsa, NULL);
     sigaction(SIGQUIT, &quitsa, NULL);
     (void)sigprocmask(SIG_SETMASK, &omask, NULL);

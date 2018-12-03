@@ -35,7 +35,7 @@ extern char *convert_to_string[];
 
 int parse_request(int, struct http_request *);
 int parse_args(int, char **, struct server_info *);
-void do_cgi(char *, response *);
+void do_cgi(char *, struct server_info *, struct http_request *, response *);
 void handle_request(int, struct server_info *, struct http_request *, char *);
 void respond(int, struct http_request *, response *);
 void internal_error(int, struct http_request *);

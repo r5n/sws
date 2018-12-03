@@ -158,7 +158,7 @@ struct http_request *req, char *cwd)
     }
 
     if (cgi) {
-        do_cgi(real, &resp);
+        do_cgi(real, info, req, &resp);
         goto end;
     }
 
