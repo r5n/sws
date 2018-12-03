@@ -7,4 +7,7 @@ clean:
 	rm *.o
 	rm sws
 
-.PHONY: clean
+format:
+	clang-format -i *.[ch]
+
+.PHONY: clean format
