@@ -163,7 +163,7 @@ handle_request(int client, struct options *opt,
 
     if (S_ISDIR(st.st_mode)) {
         listing(client, real, req->time, &resp);
-    } else if ((file = open(real, O_RDONLY)) < 0) {
+    } else if ((file = open(real, O_RDONLY)) >= 0) {
         char buf[BUFSIZ], tmbuf[BUFSIZ], lmbuf[BUFSIZ];
         ssize_t rd;
         time_t now;
@@ -194,7 +194,9 @@ handle_request(int client, struct options *opt,
         }
 
         dprintf(client, "Content-Type: %s\r\n", mime);
-        dprintf(client, "Content-Length: %lld\n", (long long)st.st_size);
+        dprintf(client, "Content-Length: %lld\r\n", (long long)st.st_size);
+
+        dprintf(client, "\r\n");
 
         while ((rd = read(file, buf, sizeof buf)) > 0) {
             if (write(client, buf, rd) < 0) {
