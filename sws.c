@@ -62,8 +62,8 @@ logging(struct http_request *req, char *line, response *resp)
                 err(1,"Log time formatting");
         }
 
-        if (sprintf(buf, "%s %s \"%s\" %d %lu\n",
-                    ip, time_line, line, resp->code, strlen(resp->content)) < 0)
+        if (sprintf(buf, "%s %s \"%s\" %d %lld\n",
+                    ip, time_line, line, resp->code, resp->content_len) < 0)
                 err(1, "sprintf");
 
         if (server_info.debug) {
@@ -88,6 +88,7 @@ void http(int fd, char *cwd,
     if (parse_request(fd, &req) == -1) {
         respond(fd, &req, &(response){
                 .content = NULL,
+                .content_len = 0,
                 .code = 400,
                 .last_modified = NULL,
         });

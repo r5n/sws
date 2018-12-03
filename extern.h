@@ -27,6 +27,7 @@ struct http_request {
 typedef struct {
     struct tm *last_modified;
     char *content;
+    long long content_len;
     char *content_type;
     int code;
 } response;
