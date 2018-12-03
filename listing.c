@@ -41,7 +41,8 @@ html_header(char **buf, size_t *bufsz, size_t *buflen, char *path)
         err(1, "snprintf");
 
     while (n >= (int)(*bufsz - *buflen)) {
-        *buf = realloc(*buf, *bufsz + n + 1);
+        if ((*buf = realloc(*buf, *bufsz + n + 1)) == NULL)
+            err(1, "realloc");
         *bufsz += n + 1;
     }
     (void)strncpy(*buf+(*buflen), tmp, n + 1);
@@ -59,7 +60,8 @@ html_footer(char **buf, size_t *bufsz, size_t *buflen)
         err(1, "snprintf");
 
     if (n >= (int)(*bufsz - *buflen)) {
-        *buf = realloc(*buf, *bufsz + n + 1);
+        if ((*buf = realloc(*buf, *bufsz + n + 1)) == NULL)
+            err(1, "realloc");
         *bufsz += n + 1;
     }
 
@@ -84,7 +86,8 @@ write_entry(char **buf, size_t *bufsz, size_t *buflen,
         err(1, "snprintf");
 
     if (n >= (int)(*bufsz - *buflen)) {
-        *buf = realloc(*buf, *bufsz + n + 1);
+        if ((*buf = realloc(*buf, *bufsz + n + 1)) == NULL)
+            err(1, "realloc");
         *bufsz += n + 1;
     }
     (void)strncpy(*buf+(*buflen), tmp, n + 1);
