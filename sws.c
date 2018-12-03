@@ -77,8 +77,8 @@ void http(struct options *options,struct server_info * server_info,int fd,char *
 		err(1, "malloc");
 
 	if (parse_request(fd, &req) == -1) {
-	    /* err(1, "parse_request"); */
-		write_bad_request(fd);
+	    bad_request(fd);
+	    err(1, "parse_request");
 	}
 
 	printf("received : ");
