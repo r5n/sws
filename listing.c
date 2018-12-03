@@ -35,6 +35,48 @@ cmpfn(const FTSENT **ent1, const FTSENT **ent2)
     return strncmp((*ent1)->fts_name, (*ent2)->fts_name, len);
 }
 
+void
+html_header(char **buf, size_t *bufsz, size_t *buflen, char *path)
+{
+    int n;
+    char tmp[BUFSIZ];
+
+    n = snprintf(tmp, BUFSIZ,
+		 "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2 FINAL//EN\">\n"
+		 "<html>\n<head><title>Index of %s</title></head>\n"
+		 "<body>\n<h1>Index of %s</h1>\n<table>\n",
+		 path, path);
+    if (n < 0)
+	err(1, "snprintf");
+
+    while (n >= (int)(*bufsz - *buflen)) {
+	*bufsz *= 2;
+	if ((*buf = realloc(*buf, *bufsz)) == NULL)
+	    err(1, "realloc");
+    }
+    (void)strncpy(*buf+(*buflen), tmp, n);
+    *buflen += n;
+}
+
+void
+html_footer(char **buf, size_t *bufsz, size_t *buflen)
+{
+    int n;
+    char tmp[BUFSIZ];
+
+    n = snprintf(tmp, BUFSIZ, "\n</table>\n</body>\n</html>\n");
+    if (n < 0)
+	err(1, "snprintf");
+
+    while (n >= (int)(*bufsz - *buflen)) {
+	*bufsz *= 2;
+	if ((*buf = realloc(*buf, *bufsz)) == NULL)
+	    err(1, "realloc");
+    }
+    (void)strncpy(*buf+(*buflen), tmp, n);
+    *buflen += n;
+}
+
 /* change for NetBSD --> int sz to char *sz */
 void
 write_entry(char **buf, size_t *bufsz, size_t *buflen,
@@ -52,8 +94,8 @@ write_entry(char **buf, size_t *bufsz, size_t *buflen,
 	if ((*buf = realloc(*buf, *bufsz)) == NULL)
 	    err(1, "realloc");
     }
-    (void)strncpy(*buf+(*buflen), tmp, n - 1);
-    *buflen += n - 1;
+    (void)strncpy(*buf+(*buflen), tmp, n); // don't copy '\0'
+    *buflen += n;
 }
 
 void
@@ -94,6 +136,8 @@ listing(int fd, char *path, struct tm *mod, struct http_response *resp)
     if ((chlp = fts_children(fp, 0)) == NULL)
 	err(1, "fts_children");
 
+    html_header(&resp->content, &size, &len, path);
+
     for (; chlp != NULL; chlp = chlp->fts_link) {
 	st = chlp->fts_statp;
 
@@ -122,6 +166,8 @@ listing(int fd, char *path, struct tm *mod, struct http_response *resp)
 	write_entry(&resp->content, &size, &len,
 		    chlp->fts_name, buft, (int)st->st_size);
     }
+
+    html_footer(&resp->content, &size, &len);
 
     resp->content_length = len;
     resp->content_type = strdup("text/html");
