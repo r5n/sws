@@ -9,17 +9,17 @@
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <netdb.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include <fcntl.h>
 
 #include "extern.h"
 
@@ -31,54 +31,47 @@ int logfd;
 #define LOG_PERMS 0600
 #define LOG_MODES O_WRONLY | O_APPEND | O_CREAT
 
-char *
-convert_to_string[] = {
-        "GET","HEAD","UNSUPPORTED"
-};
+char *convert_to_string[] = {"GET", "HEAD", "UNSUPPORTED"};
 
 // log format: remote_ip time_in_GMT first_line status size_of_the_response
-void
-logging(struct http_request *req, char *line, response *resp)
-{
-        time_t now;
-        char time_line[BUFSIZ];
-        char buf[BUFSIZ];
-        char ip[MAX(INET_ADDRSTRLEN, INET6_ADDRSTRLEN)] = {0};
-        struct tm *time_struct;
+void logging(struct http_request *req, char *line, response *resp) {
+    time_t now;
+    char time_line[BUFSIZ];
+    char buf[BUFSIZ];
+    char ip[MAX(INET_ADDRSTRLEN, INET6_ADDRSTRLEN)] = {0};
+    struct tm *time_struct;
 
-        if (time(&now) == -1)
-                err(1, "time");
-        time_struct = gmtime(&now);
+    if (time(&now) == -1)
+        err(1, "time");
+    time_struct = gmtime(&now);
 
-        if (req->addr->sa_family == AF_INET) {
-            if (inet_ntop(AF_INET, &((struct sockaddr_in*)req->addr)->sin_addr,
-                          ip, sizeof ip) == NULL)
-                err(1, "inet_pton");
-        } else {
-            if (inet_ntop(AF_INET6, &((struct sockaddr_in6*)req->addr)->sin6_addr,
-                          ip, sizeof ip) == NULL)
-                err(1, "inet_pton");
-        }
+    if (req->addr->sa_family == AF_INET) {
+        if (inet_ntop(AF_INET, &((struct sockaddr_in *)req->addr)->sin_addr, ip,
+                      sizeof ip) == NULL)
+            err(1, "inet_pton");
+    } else {
+        if (inet_ntop(AF_INET6, &((struct sockaddr_in6 *)req->addr)->sin6_addr,
+                      ip, sizeof ip) == NULL)
+            err(1, "inet_pton");
+    }
 
-        if(strftime(time_line,BUFSIZ,"%d/%b/%Y:%T:%z",time_struct) == 0){
-                err(1,"Log time formatting");
-        }
+    if (strftime(time_line, BUFSIZ, "%d/%b/%Y:%T:%z", time_struct) == 0) {
+        err(1, "Log time formatting");
+    }
 
-        if (sprintf(buf, "%s %s \"%s\" %d %lld\n",
-                    ip, time_line, line, resp->code, resp->content_len) < 0)
-                err(1, "sprintf");
+    if (sprintf(buf, "%s %s \"%s\" %d %lld\n", ip, time_line, line, resp->code,
+                resp->content_len) < 0)
+        err(1, "sprintf");
 
-        if (server_info.debug) {
-                printf("%s", buf);
-        } else {
-                if (write(logfd, buf, strlen(buf)) == -1)
-                        err(1,"Could not write %s to file:",line);
-        }
+    if (server_info.debug) {
+        printf("%s", buf);
+    } else {
+        if (write(logfd, buf, strlen(buf)) == -1)
+            err(1, "Could not write %s to file:", line);
+    }
 }
 
-void http(int fd, char *cwd,
-          struct sockaddr *addr, socklen_t addrlen)
-{
+void http(int fd, char *cwd, struct sockaddr *addr, socklen_t addrlen) {
     struct http_request req;
 
     if ((req.time = malloc(sizeof(struct tm))) == NULL)
@@ -88,12 +81,13 @@ void http(int fd, char *cwd,
     req.addrlen = addrlen;
 
     if (parse_request(fd, &req) == -1) {
-        respond(fd, &req, &(response){
-                .content = NULL,
-                .content_len = 0,
-                .code = 400,
-                .last_modified = NULL,
-        });
+        respond(fd, &req,
+                &(response){
+                    .content = NULL,
+                    .content_len = 0,
+                    .code = 400,
+                    .last_modified = NULL,
+                });
         return;
     }
 
@@ -101,34 +95,32 @@ void http(int fd, char *cwd,
 }
 
 char *sockaddr_to_str(struct sockaddr *addr, socklen_t addrlen) {
-	char nihost[NI_MAXHOST] = {0};
-	char niserv[NI_MAXSERV] = {0};
-	char *res;
-	int len, gaierr;
+    char nihost[NI_MAXHOST] = {0};
+    char niserv[NI_MAXSERV] = {0};
+    char *res;
+    int len, gaierr;
 
-	// we exit in this utility function, because if we cannot convert an IPv4
-	// or IPv6 addr, something is really wrong
-	if ((gaierr = getnameinfo(addr, addrlen,
-					nihost, sizeof nihost,
-					niserv, sizeof niserv,
-					NI_NUMERICHOST | NI_NUMERICSERV)) != 0)
-		errx(1, "getnameinfo(): %s", gai_strerror(gaierr));
+    // we exit in this utility function, because if we cannot convert an IPv4
+    // or IPv6 addr, something is really wrong
+    if ((gaierr =
+             getnameinfo(addr, addrlen, nihost, sizeof nihost, niserv,
+                         sizeof niserv, NI_NUMERICHOST | NI_NUMERICSERV)) != 0)
+        errx(1, "getnameinfo(): %s", gai_strerror(gaierr));
 
-	// format: [host]:port
-	len = 1 + strlen(nihost) + 2 + strlen(niserv) + 1;
-	if ((res = calloc(1, len)) == NULL)
-		err(1, "calloc");
+    // format: [host]:port
+    len = 1 + strlen(nihost) + 2 + strlen(niserv) + 1;
+    if ((res = calloc(1, len)) == NULL)
+        err(1, "calloc");
 
-	if (addr->sa_family == AF_INET6)
-		snprintf(res, len, "[%s]:%s", nihost, niserv);
-	else
-		snprintf(res, len, "%s:%s", nihost, niserv);
+    if (addr->sa_family == AF_INET6)
+        snprintf(res, len, "[%s]:%s", nihost, niserv);
+    else
+        snprintf(res, len, "%s:%s", nihost, niserv);
 
-	return res;
+    return res;
 }
 
-void
-init_settings(){
+void init_settings() {
     server_info.cgi_dir = NULL;
     server_info.dir = NULL;
     server_info.address = NULL;
@@ -143,9 +135,9 @@ void sigchld() {
         perror("wait");
 }
 
-int 
-main(int argc,char **argv) {
-    struct sockaddr_in6 client; // assuming sockaddr_in6 is bigger than sockaddr_in
+int main(int argc, char **argv) {
+    struct sockaddr_in6
+        client; // assuming sockaddr_in6 is bigger than sockaddr_in
     struct addrinfo hints, *res;
     int clientsock, set, status;
     nfds_t nsocks, i;
@@ -171,21 +163,23 @@ main(int argc,char **argv) {
         errx(1, "%s is not a directory", dir);
 
     printf("Serving from %s\n", dir);
-    
+
     host = server_info.address;
     port = server_info.port;
     nsocks = 0;
-    
+
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE | AI_NUMERICHOST | AI_NUMERICSERV;
 
-    if (!server_info.debug && (logfd = open(server_info.logdir, LOG_MODES, LOG_PERMS)) == -1)
-	err(1,"Could not open log file");
+    if (!server_info.debug &&
+        (logfd = open(server_info.logdir, LOG_MODES, LOG_PERMS)) == -1)
+        err(1, "Could not open log file");
 
     if ((status = getaddrinfo(host, port, &hints, &res)) != 0)
-        errx(1, "getaddrinfo([%s], [%s]): %s", host, port, gai_strerror(status));
+        errx(1, "getaddrinfo([%s], [%s]): %s", host, port,
+             gai_strerror(status));
 
     for (struct addrinfo *addr = res; addr; addr = addr->ai_next)
         ++nsocks;
@@ -196,18 +190,22 @@ main(int argc,char **argv) {
     i = 0;
     for (struct addrinfo *addr = res; addr; addr = addr->ai_next) {
         fds[i].events = POLLIN;
-        fds[i].fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
+        fds[i].fd =
+            socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
         if (fds[i].fd < 0)
             err(1, "socket");
 
         set = 1;
         if (addr->ai_family == AF_INET6)
-            // disable dual-stack sockets, so that we can bind to the same port on IPv4
-            if (setsockopt(fds[i].fd, IPPROTO_IPV6, IPV6_V6ONLY, &set, sizeof set) < 0)
+            // disable dual-stack sockets, so that we can bind to the same port
+            // on IPv4
+            if (setsockopt(fds[i].fd, IPPROTO_IPV6, IPV6_V6ONLY, &set,
+                           sizeof set) < 0)
                 err(1, "setsockopt(IPV6_V6ONLY)");
 
         set = 1;
-        if (setsockopt(fds[i].fd, SOL_SOCKET, SO_REUSEADDR, &set, sizeof set) < 0)
+        if (setsockopt(fds[i].fd, SOL_SOCKET, SO_REUSEADDR, &set, sizeof set) <
+            0)
             perror("setsockopt(SO_REUSEADDR)");
 
         if (bind(fds[i].fd, addr->ai_addr, addr->ai_addrlen) < 0)
@@ -227,7 +225,8 @@ main(int argc,char **argv) {
 
     if (!server_info.debug)
 #pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated" // daemon(5) is deprecated on macOS
+#pragma clang diagnostic ignored                                               \
+    "-Wdeprecated" // daemon(5) is deprecated on macOS
         if (daemon(0, 0) != 0)
 #pragma clang diagnostic pop
             err(1, "daemon");
@@ -238,30 +237,31 @@ main(int argc,char **argv) {
                 continue;
 
             clientsz = sizeof(client);
-            clientsock = accept(fds[i].fd, (struct sockaddr *)&client, &clientsz);
+            clientsock =
+                accept(fds[i].fd, (struct sockaddr *)&client, &clientsz);
             if (clientsock < 0) {
                 perror("accept");
                 continue;
             }
 
             switch (fork()) {
-                case -1:
-                    err(1, "fork");
-                    break;
+            case -1:
+                err(1, "fork");
+                break;
 
-                case 0: // child
-                    http(clientsock, dir, (struct sockaddr*)&client, clientsz);
-                    return 0;
-                    break;
+            case 0: // child
+                http(clientsock, dir, (struct sockaddr *)&client, clientsz);
+                return 0;
+                break;
 
-                default: // parent
-                    break;
+            default: // parent
+                break;
             }
         }
     }
     if (status < 0)
         err(1, "poll");
-    
+
     if (!server_info.debug)
         (void)close(logfd);
 

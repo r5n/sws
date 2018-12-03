@@ -14,30 +14,27 @@
 #include "extern.h"
 
 #define __NETBSD
-#define HUMANIZE_LEN  5
-#define STRTIME_FMT   "%Y-%m-%d %H:%M "
-#define STRTIME_LEN   17
+#define HUMANIZE_LEN 5
+#define STRTIME_FMT "%Y-%m-%d %H:%M "
+#define STRTIME_LEN 17
 
-int
-num_len(off_t n)
-{
-    if (n <= 0) return 1;
+int num_len(off_t n) {
+    if (n <= 0)
+        return 1;
     return (int)floor(log10((float)n)) + 1;
 }
 
-void
-html_header(char **buf, size_t *bufsz, size_t *buflen, char *path)
-{
+void html_header(char **buf, size_t *bufsz, size_t *buflen, char *path) {
     int n;
     char tmp[BUFSIZ];
 
     n = snprintf(tmp, BUFSIZ,
-         "<!DOCTYPE HTML>\n"
-         "<html>\n<head><title>Index of %s</title></head>\n"
-         "<body>\n<h1>Index of %s</h1>\n<table>\n"
-         "<tr><td><b>Name</b></td><td><b>Last Modified</b></td>"
-         "<td><b>Size</b></td>",
-         path, path);
+                 "<!DOCTYPE HTML>\n"
+                 "<html>\n<head><title>Index of %s</title></head>\n"
+                 "<body>\n<h1>Index of %s</h1>\n<table>\n"
+                 "<tr><td><b>Name</b></td><td><b>Last Modified</b></td>"
+                 "<td><b>Size</b></td>",
+                 path, path);
     if (n < 0)
         err(1, "snprintf");
 
@@ -46,13 +43,11 @@ html_header(char **buf, size_t *bufsz, size_t *buflen, char *path)
             err(1, "realloc");
         *bufsz += n + 1;
     }
-    (void)strncpy(*buf+(*buflen), tmp, n + 1);
+    (void)strncpy(*buf + (*buflen), tmp, n + 1);
     *buflen += n;
 }
 
-void
-html_footer(char **buf, size_t *bufsz, size_t *buflen)
-{
+void html_footer(char **buf, size_t *bufsz, size_t *buflen) {
     int n;
     char tmp[BUFSIZ];
 
@@ -70,20 +65,18 @@ html_footer(char **buf, size_t *bufsz, size_t *buflen)
     *buflen += n;
 }
 
-void
-write_entry(char **buf, size_t *bufsz, size_t *buflen,
-	    char *name, char *tm,
-#ifdef __NETBSD	    
-	    char *sz,
+void write_entry(char **buf, size_t *bufsz, size_t *buflen, char *name,
+                 char *tm,
+#ifdef __NETBSD
+                 char *sz,
 #else
-	    int sz,
-#endif	    
-	    bool isdir)
-{
+                 int sz,
+#endif
+                 bool isdir) {
     int n;
     char tmp[BUFSIZ];
 
-#ifdef __NETBSD    
+#ifdef __NETBSD
     n = snprintf(tmp, BUFSIZ,
                  "<tr>\n"
                  "<td><a href=\"%s%s\">%s%s</a></td><td>%s</td><td>%s</td>\n"
@@ -104,13 +97,11 @@ write_entry(char **buf, size_t *bufsz, size_t *buflen,
             err(1, "realloc");
         *bufsz += n + 1;
     }
-    (void)strncpy(*buf+(*buflen), tmp, n + 1);
+    (void)strncpy(*buf + (*buflen), tmp, n + 1);
     *buflen += n;
 }
 
-void
-listing(int fd, char *target, struct http_request *req, response *resp)
-{
+void listing(int fd, char *target, struct http_request *req, response *resp) {
     DIR *dp;
     struct dirent *dirp;
     time_t tmod;
@@ -118,7 +109,7 @@ listing(int fd, char *target, struct http_request *req, response *resp)
     char buf[PATH_MAX + 1], fpath[PATH_MAX + 1], tbuf[STRTIME_LEN];
 #ifdef __NETBSD
     char bufh[HUMANIZE_LEN];
-    //char *suffix;
+    // char *suffix;
 #endif
     struct stat st;
     size_t size, len;
@@ -173,20 +164,20 @@ listing(int fd, char *target, struct http_request *req, response *resp)
         }
 
 #ifdef __NETBSD
-        if ((humanize_number(bufh, HUMANIZE_LEN, (int64_t)st.st_size,
-                    "", HN_AUTOSCALE,
-                    HN_DECIMAL | HN_NOSPACE | HN_B)) == -1) {
+        if ((humanize_number(bufh, HUMANIZE_LEN, (int64_t)st.st_size, "",
+                             HN_AUTOSCALE, HN_DECIMAL | HN_NOSPACE | HN_B)) ==
+            -1) {
             internal_error(fd, req);
             err(1, "humanize_number");
         }
-	write_entry(&resp->content, &size, &len, dirp->d_name,
-		    tbuf, bufh, S_ISDIR(st.st_mode));
+        write_entry(&resp->content, &size, &len, dirp->d_name, tbuf, bufh,
+                    S_ISDIR(st.st_mode));
 #else
-        write_entry(&resp->content, &size, &len, dirp->d_name,
-                tbuf, (int)st.st_size, S_ISDIR(st.st_mode));
-#endif	
+        write_entry(&resp->content, &size, &len, dirp->d_name, tbuf,
+                    (int)st.st_size, S_ISDIR(st.st_mode));
+#endif
     }
-    
+
     html_footer(&resp->content, &size, &len);
 
     resp->content_type = "text/html";

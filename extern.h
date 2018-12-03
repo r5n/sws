@@ -15,7 +15,7 @@ struct server_info {
 
 struct http_request {
     struct tm *time;
-    enum {GET, HEAD, UNSUPPORTED} type;
+    enum { GET, HEAD, UNSUPPORTED } type;
     char *uri;
     int if_modified;
     int mjr;
