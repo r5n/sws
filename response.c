@@ -3,6 +3,7 @@
 
 #include <err.h>
 #include <errno.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <libgen.h>
 #include <limits.h>
@@ -99,9 +100,11 @@ handle_request(int client, struct server_info *info,
     struct passwd *pw;
     char *full, *real, *home, *start, *end, *username;
     struct stat st;
+    struct dirent *dir;
+    DIR *list_dir;
     long ulen;
     int file;
-    bool cgi, homedir;
+    bool cgi, homedir, found;
 
     home = NULL;
 
@@ -211,10 +214,27 @@ handle_request(int client, struct server_info *info,
         };
         goto end;
     }
-
+    
+    found = false;
     if (S_ISDIR(st.st_mode)) {
-        listing(client, real, req, &resp);
-    } else if ((file = open(real, O_RDONLY)) >= 0) {
+        if ((list_dir = opendir(real)) == NULL){
+		err(1,"Directory error");
+	}
+
+	while ((dir = readdir(list_dir)) != NULL){
+		if (strcmp(dir->d_name, "index.html") == 0){
+			real = realloc(real,sizeof("/index.html"));
+			strcat(real,"/index.html");
+			found = true;
+		}
+	}
+
+	if(found == false)
+	    listing(client,real, req, &resp);
+
+    } 
+    
+    if (found || (file = open(real, O_RDONLY)) >= 0) {
         char buf[BUFSIZ], tmbuf[BUFSIZ], lmbuf[BUFSIZ];
         ssize_t rd;
         time_t now;
