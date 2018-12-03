@@ -72,8 +72,9 @@ void http(struct options *options,struct server_info * server_info,int fd,char *
 {
 	struct http_request req;
 	char reqstring[BUFSIZ];
-	
-	if ((req.time = malloc(sizeof(struct tm))) == NULL)
+
+	if (req.if_modified == 1)
+	    if ((req.time = malloc(sizeof(struct tm))) == NULL)
 		err(1, "malloc");
 
 	if (parse_request(fd, &req) == -1) {
@@ -245,8 +246,8 @@ main(int argc,char **argv) {
                 case 0: // child
                     ipport = sockaddr_to_str((struct sockaddr *)&client, clientsz);
                     printf("got connection from %s\n", ipport);
-                    free(ipport);
                     http(&options, &server_info, clientsock, ipport);
+                    free(ipport);
                     break;
 
                 default: // parent

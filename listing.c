@@ -145,7 +145,12 @@ listing(int fd, char *path, struct tm *mod, struct http_response *resp)
 
 	if (mod != NULL)
 	    if (difftime(st.st_mtime, tmod) < 0)
+	if (mod != NULL) {
+	    if (difftime(st.st_mtime, tmod) > 0) {
+		printf("have to continue\n");
 		continue;
+	    }
+	}
 
 	tp = gmtime(&st.st_mtime);
 	if (tp == NULL) {
