@@ -103,7 +103,7 @@ write_entry(char **buf, size_t *bufsz, size_t *buflen,
 }
 
 void
-listing(int fd, char *path, struct tm *mod, struct http_response *resp)
+listing(int fd, char *target, struct tm *mod, struct http_response *resp)
 {
     DIR *dp;
     struct dirent *dirp;
@@ -112,15 +112,24 @@ listing(int fd, char *path, struct tm *mod, struct http_response *resp)
     char buf[PATH_MAX + 1], fpath[PATH_MAX + 1], tbuf[STRTIME_LEN];
     struct stat st;
     size_t size, len;
+    char *fav, *path;
 
     size = BUFSIZ;
     len = 0;
+    path = target;
 
     if (mod != NULL)
 	tmod = mktime(mod);
 
+    fav = strstr(target, "favicon.ico");
+    if (fav != NULL) { /* request from browser */
+	*fav = '\0';
+	path = strdup(target);
+	printf("path: %s\n", path);
+    }
+
     if ((dp = opendir(path)) == NULL)
-	err(1, "opendir"); // send response to client
+	err(1, "opendir"); // TODO send response to client instead
 
     if ((resp->content = calloc(size, 1)) == NULL) {
 	internal_error(fd);
@@ -138,13 +147,10 @@ listing(int fd, char *path, struct tm *mod, struct http_response *resp)
 
 	(void)snprintf(buf, PATH_MAX, "%s/%s", path, dirp->d_name);
 	(void)realpath(buf, fpath);
-	// printf("fpath buf : %s\n", fpath);
-	
+
 	if ((stat(fpath, &st)) == -1)
 	    err(1, "stat");
 
-	if (mod != NULL)
-	    if (difftime(st.st_mtime, tmod) < 0)
 	if (mod != NULL) {
 	    if (difftime(st.st_mtime, tmod) > 0) {
 		printf("have to continue\n");
@@ -177,6 +183,9 @@ listing(int fd, char *path, struct tm *mod, struct http_response *resp)
     }
     
     html_footer(&resp->content, &size, &len);
+
+    if (fav != NULL)
+	free(path);  // free strdup call
 
     resp->content_length = len;
     resp->content_type = strdup("text/html");

@@ -1,3 +1,5 @@
+#include <sys/socket.h>
+
 #include <err.h>
 #include <errno.h>
 #include <limits.h>
@@ -58,6 +60,8 @@ respond(int fd, struct http_request *req, struct http_response *resp)
 
     time(&now);
     tm_p = gmtime(&now);
+    if (tm_p == NULL)
+	err(1, "gmtime");
     if (strftime(tmbuf, BUFSIZ, DATE_FMT, tm_p) == 0)
 	err(1, "strftime");
 
@@ -76,6 +80,9 @@ respond(int fd, struct http_request *req, struct http_response *resp)
     if ((req == NULL) || (req->type == GET)) { // NULL when bad_request
     	dprintf(fd, "%s" CRLF, resp->content);
     }
+
+    if (shutdown(fd, SHUT_RDWR) == -1)
+	err(1, "shutdown");
 }
 
 /* For when parsing fails and we don't have a request object */
