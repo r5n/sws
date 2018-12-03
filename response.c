@@ -98,15 +98,13 @@ handle_request(int client, struct server_info *info,
 {
     response resp;
     struct passwd *pw;
-    char *full, *real, *home, *start, *end, *username;
+    char *full, *real, *home, *start, *end, *username, *indexhtml;
     struct stat st;
-    struct dirent *dir;
-    DIR *list_dir;
     long ulen;
     int file;
-    bool cgi, homedir, found;
+    bool cgi, homedir;
 
-    home = NULL;
+    home = full = indexhtml = NULL;
 
     // for cgi we want "{info->cgi_dir}/${uri+8}"
     // otherwise, we want "{info->dir}/{uri}"
@@ -214,27 +212,34 @@ handle_request(int client, struct server_info *info,
         };
         goto end;
     }
-    
-    found = false;
+
     if (S_ISDIR(st.st_mode)) {
-        if ((list_dir = opendir(real)) == NULL){
-		err(1,"Directory error");
-	}
+        if (asprintf(&indexhtml, "%s/index.html", real) == -1)
+            err(1, "asprintf");
 
-	while ((dir = readdir(list_dir)) != NULL){
-		if (strcmp(dir->d_name, "index.html") == 0){
-			real = realloc(real,sizeof("/index.html"));
-			strcat(real,"/index.html");
-			found = true;
-		}
-	}
+        // TOCTOU issue
+        if (access(indexhtml, O_RDONLY) == 0) {
+            char *old = real;
+            real = indexhtml;
+            free(old);
 
-	if(found == false)
-	    listing(client,real, req, &resp);
+            // need to re-call stat() for index.html
+            if (stat(real, &st) < 0) {
+                resp = (response){
+                    .last_modified = NULL,
+                    .content = strerror(errno),
+                    .content_len = -1,
+                    .code = 403 // This is probably not always the correct response
+                };
+                goto end;
+            }
+        } else {
+            listing(client, real, req, &resp);
+            goto end;
+        }
+    }
 
-    } 
-    
-    if (found || (file = open(real, O_RDONLY)) >= 0) {
+    if ((file = open(real, O_RDONLY)) >= 0) {
         char buf[BUFSIZ], tmbuf[BUFSIZ], lmbuf[BUFSIZ];
         ssize_t rd;
         time_t now;
@@ -306,6 +311,7 @@ handle_request(int client, struct server_info *info,
 
 end:
     respond(client, req, &resp);
+    free(indexhtml);
     free(home);
     free(real);
     free(full);
