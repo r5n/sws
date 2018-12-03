@@ -41,11 +41,10 @@ html_header(char **buf, size_t *bufsz, size_t *buflen, char *path)
         err(1, "snprintf");
 
     while (n >= (int)(*bufsz - *buflen)) {
-        *bufsz *= 2;
-        if ((*buf = realloc(*buf, *bufsz)) == NULL)
-            err(1, "realloc");
+        *buf = realloc(*buf, *bufsz + n + 1);
+        *bufsz += n + 1;
     }
-    (void)strncpy(*buf+(*buflen), tmp, n);
+    (void)strncpy(*buf+(*buflen), tmp, n + 1);
     *buflen += n;
 }
 
@@ -55,16 +54,16 @@ html_footer(char **buf, size_t *bufsz, size_t *buflen)
     int n;
     char tmp[BUFSIZ];
 
-    n = snprintf(tmp, BUFSIZ, "\n</table>\n</body>\n</html>\n");
+    n = snprintf(tmp, BUFSIZ, "\n</table>\n</body>\n</html>");
     if (n < 0)
-    err(1, "snprintf");
+        err(1, "snprintf");
 
-    while (n >= (int)(*bufsz - *buflen)) {
-        *bufsz *= 2;
-        if ((*buf = realloc(*buf, *bufsz)) == NULL)
-            err(1, "realloc");
+    if (n >= (int)(*bufsz - *buflen)) {
+        *buf = realloc(*buf, *bufsz + n + 1);
+        *bufsz += n + 1;
     }
-    (void)strncpy(*buf+(*buflen), tmp, n);
+
+    (void)strncpy(*buf + (*buflen), tmp, n + 1);
     *buflen += n;
 }
 
@@ -84,12 +83,11 @@ write_entry(char **buf, size_t *bufsz, size_t *buflen,
     if (n < 0)
         err(1, "snprintf");
 
-    while (n >= (int)(*bufsz - *buflen)) {
-        *bufsz *= 2;
-        if ((*buf = realloc(*buf, *bufsz)) == NULL)
-            err(1, "realloc");
+    if (n >= (int)(*bufsz - *buflen)) {
+        *buf = realloc(*buf, *bufsz + n + 1);
+        *bufsz += n + 1;
     }
-    (void)strncpy(*buf+(*buflen), tmp, n); // don't copy '\0'
+    (void)strncpy(*buf+(*buflen), tmp, n + 1);
     *buflen += n;
 }
 
