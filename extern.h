@@ -2,22 +2,15 @@
 #define _EXTERN_H_
 
 #include <stdbool.h>
+#include <sys/socket.h>
 
-struct options{
-    bool cgi; 
+struct server_info {
+    char *cgi_dir;
+    char *dir;
+    char *address;
+    char *port;
+    char *logdir;
     bool debug;
-    bool help;
-    bool bind_to;
-    bool log;
-    bool port;
-};
-
-struct server_info{
-    char * cgi_dir;
-    char * dir;
-    char * address;
-    char * logdir;
-    char * port;
 };
 
 struct http_request {
@@ -27,6 +20,8 @@ struct http_request {
     int if_modified;
     int mjr;
     int mnr;
+    struct sockaddr *addr;
+    socklen_t *addrlen;
 };
 
 typedef struct {
@@ -36,13 +31,15 @@ typedef struct {
     int code;
 } response;
 
+extern char *convert_to_string[];
+
 int parse_request(int, struct http_request *);
-int parse_args(int, char **,struct options *,struct server_info *);
+int parse_args(int, char **, struct server_info *);
 void do_cgi(char *, response *);
-void handle_request(int, struct options *,
-                    struct server_info *, struct http_request *, char *);
-void respond(int, response *);
-void internal_error(int);
+void handle_request(int, struct server_info *, struct http_request *, char *);
+void respond(int, struct http_request *, response *);
+void internal_error(int, struct http_request *);
 void listing(int, char *, struct http_request *, response *);
+void logging(struct http_request *, char *, response *);
 
 #endif // ifndef _EXTERN_H_

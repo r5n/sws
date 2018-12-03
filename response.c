@@ -33,9 +33,9 @@ const response_code responses[] = {
 };
 
 void
-internal_error(int fd)
+internal_error(int fd, struct http_request *req)
 {
-    respond(fd, &(response){
+    respond(fd, req, &(response){
         .last_modified = NULL,
         .content = "Internal server error",
         .code = 500
@@ -43,10 +43,10 @@ internal_error(int fd)
 }
 
 void
-respond(int fd, response *resp)
+respond(int fd, struct http_request *req, response *resp)
 {
     time_t now;
-    char tmbuf[BUFSIZ], lmbuf[BUFSIZ];
+    char tmbuf[BUFSIZ], lmbuf[BUFSIZ], *buf;
     const char *reason = "Unknown";
 
 
@@ -77,11 +77,19 @@ respond(int fd, response *resp)
 
     if (resp->content)
         dprintf(fd, "%s", resp->content);
+
+    if ((buf = calloc(5 + strlen(req->uri) + 9 + 1, 1)) == NULL)
+        err(1, "calloc");
+
+    sprintf(buf, "%s %s HTTP/%d.%d",
+        convert_to_string[req->type], req->uri, req->mjr, req->mnr);
+
+    logging(req, buf, resp);
 }
 
 void
-handle_request(int client, struct options *opt,
-               struct server_info *info, struct http_request *req, char *cwd)
+handle_request(int client, struct server_info *info,
+struct http_request *req, char *cwd)
 {
     response resp;
     char *full, *real;
@@ -92,7 +100,7 @@ handle_request(int client, struct options *opt,
     // for cgi we want "{info->cgi_dir}/${uri+8}"
     // otherwise, we want "{info->dir}/{uri}"
 
-    cgi = strncmp(req->uri, "/cgi-bin", 8) == 0 && opt->cgi;
+    cgi = strncmp(req->uri, "/cgi-bin", 8) == 0 && info->cgi_dir;
 
     if (cgi) {
         full = malloc(strlen(info->cgi_dir) + 1 + strlen(req->uri) - strlen("/cgi-bin"));
@@ -110,7 +118,7 @@ handle_request(int client, struct options *opt,
     if (!real) {
         if (errno == ENOENT) {
             // security vulnerability - leaks the existence of files
-            respond(client, &(response){
+            respond(client, req, &(response){
                 .last_modified = NULL,
                 .content = "Not found",
                 .code = 404
@@ -119,7 +127,7 @@ handle_request(int client, struct options *opt,
             return;
         } else {
             fprintf(stderr, "realpath(%s): %s\n", full, strerror(errno));
-            internal_error(client);
+            internal_error(client, req);
             free(full);
             return;
         }
@@ -210,6 +218,8 @@ handle_request(int client, struct options *opt,
         if (rd < 0) {
             perror("read");
         }
+        
+        // TODO log
 
         free(real);
         free(full);
@@ -224,7 +234,7 @@ handle_request(int client, struct options *opt,
     }
 
 end:
-    respond(client, &resp);
+    respond(client, req, &resp);
     free(real);
     free(full);
 }

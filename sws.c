@@ -21,12 +21,13 @@
 
 #include "extern.h"
 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
+struct server_info server_info;
 int logfd;
 
 #define LOG_PERMS 0600
 #define LOG_MODES O_WRONLY | O_APPEND | O_CREAT
-
 
 char *
 convert_to_string[] = {
@@ -35,76 +36,58 @@ convert_to_string[] = {
 
 // log format: remote_ip time_in_GMT first_line status size_of_the_response
 void
-logging(struct options *options,char *ipport,char *line)
+logging(struct http_request *req, char *line, response *resp)
 {
         time_t now;
         char time_line[BUFSIZ];
         char buf[BUFSIZ];
+        const char *ip;
         struct tm *time_struct;
 
-        time(&now);
+        if (time(&now) == -1)
+                err(1, "time");
         time_struct = gmtime(&now);
+
+        if ((ip = inet_ntop(req->addr->sa_family, req->addr, buf, *req->addrlen)) == NULL) 
+            err(1, "inet_pton");
 
         if(strftime(time_line,BUFSIZ,"%d/%b/%Y:%T:%z",time_struct) == 0){
                 err(1,"Log time formatting");
         }
 
-        if(sprintf(buf,"%s %s %s\n",ipport,time_line,line) < 0)
-                err(1,"sprintf error");
+        if (sprintf(buf, "%s %s \"%s\" %d %lu\n",
+                    ip, time_line, line, resp->code, strlen(resp->content)) < 0)
+                err(1, "sprintf");
 
-        printf("%s %s %s\n",ipport,time_line,line);
-
-        if(options->debug)
-                printf("%s",buf);
-        else{
-                if(write(logfd,buf,strlen(buf)) == -1)
+        if (server_info.debug) {
+                printf("%s", buf);
+        } else {
+                if (write(logfd, buf, strlen(buf)) == -1)
                         err(1,"Could not write %s to file:",line);
         }
-
 }
 
-void http(struct options *options,struct server_info * server_info,int fd,char * ipport, char *cwd)
+void http(int fd, char *cwd,
+          struct sockaddr *addr, socklen_t *addrlen)
 {
-	struct http_request req;
-	char reqstring[BUFSIZ];
-	if ((req.time = malloc(sizeof(struct tm))) == NULL)
-		err(1, "malloc");
+    struct http_request req;
 
-	if (parse_request(fd, &req) == -1) {
-	    respond(fd, &(response){
-                    .content = NULL,
-                    .code = 400,
-                    .last_modified = NULL,
-            });
-            return;
-        }
+    if ((req.time = malloc(sizeof(struct tm))) == NULL)
+        err(1, "malloc");
 
-	printf("received : ");
-	switch (req.type) {
-		case GET:
-			printf("GET ");
-			break;
-		case HEAD:
-			printf("HEAD ");
-			break;
-		default:
-			printf("Unsupported request");
-			return;
-	}
+    req.addr = addr;
+    req.addrlen = addrlen;
 
-        printf("%s ", req.uri);
-        printf("%d.%d", req.mjr, req.mnr);
-        if((sprintf(reqstring,"%s %s HTTP/%d.%d",convert_to_string[req.type],req.uri,req.mjr,req.mnr)) < 0)
-                err(1,"Request string creation failed:");
+    if (parse_request(fd, &req) == -1) {
+        respond(fd, &req, &(response){
+                .content = NULL,
+                .code = 400,
+                .last_modified = NULL,
+        });
+        return;
+    }
 
-
-        if (req.if_modified)
-                printf(" since: %s\n", asctime(req.time));
-        else
-                printf("\n");
-        logging(options,ipport,reqstring);
-	printf("ipport: %s\n", ipport); // unused warning REMOVE
-	handle_request(fd, options, server_info, &req, cwd);
+    handle_request(fd, &server_info, &req, cwd);
 }
 
 char *sockaddr_to_str(struct sockaddr *addr, socklen_t addrlen) {
@@ -135,15 +118,14 @@ char *sockaddr_to_str(struct sockaddr *addr, socklen_t addrlen) {
 }
 
 void
-init_struct(struct server_info *server){
-    server->cgi_dir = NULL;
-    server->dir = NULL;
-    server->address = NULL;
-    server->logdir = NULL;
-    server->port = "8080";
+init_settings(){
+    server_info.cgi_dir = NULL;
+    server_info.dir = NULL;
+    server_info.address = NULL;
+    server_info.logdir = NULL;
+    server_info.port = "8080";
+    server_info.debug = true;
 }
-
-
 
 int 
 main(int argc,char **argv) {
@@ -154,20 +136,18 @@ main(int argc,char **argv) {
     socklen_t clientsz;
     char *host, *port, *ipport, *dir;
     struct pollfd *fds;
-    struct server_info server_info;
-    struct options options;
     struct stat dir_st;
-    
-    init_struct(&server_info);
-    if (parse_args(argc,argv,&options,&server_info))
+
+    init_settings();
+    if (parse_args(argc, argv, &server_info))
         return 1;
 
     dir = realpath(server_info.dir, NULL);
     if (!dir)
-        err(1, "%s", server_info.dir);
+        err(1, "web dir: %s", server_info.dir);
 
     if (stat(dir, &dir_st) < 0)
-        err(1, "%s", dir);
+        err(1, "web dir: %s", dir);
 
     if (!S_ISDIR(dir_st.st_mode))
         errx(1, "%s is not a directory", dir);
@@ -182,8 +162,8 @@ main(int argc,char **argv) {
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE | AI_NUMERICHOST | AI_NUMERICSERV;
-    
-    if ((logfd = open(server_info.logdir, LOG_MODES, LOG_PERMS)) == -1)
+
+    if (!server_info.debug && (logfd = open(server_info.logdir, LOG_MODES, LOG_PERMS)) == -1)
 	err(1,"Could not open log file");
 
     if ((status = getaddrinfo(host, port, &hints, &res)) != 0)
@@ -245,14 +225,11 @@ main(int argc,char **argv) {
                     break;
 
                 case 0: // child
-                    ipport = sockaddr_to_str((struct sockaddr *)&client, clientsz);
-                    printf("got connection from %s\n", ipport);
-                    http(&options, &server_info, clientsock, ipport, dir);
-                    free(ipport);
+                    http(clientsock, dir,
+                         (struct sockaddr*)&client, &clientsz);
                     break;
 
                 default: // parent
-                    printf("accepted\n");
                     break;
             }
         }
@@ -260,7 +237,8 @@ main(int argc,char **argv) {
     if (status < 0)
         err(1, "poll");
     
-    (void)close(logfd);
+    if (!server_info.debug)
+        (void)close(logfd);
 
     printf("Exiting\n");
 }

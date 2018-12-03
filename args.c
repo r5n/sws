@@ -21,8 +21,7 @@ void assert_valid_address(char *ipAddress);
 void assert_valid_port(char *port_string);
 
 int
-parse_args(int argc, char **argv,struct options *options,
-        struct server_info * server_info)
+parse_args(int argc, char **argv, struct server_info * server_info)
 { 
     int c;
     char *host_name;
@@ -31,28 +30,24 @@ parse_args(int argc, char **argv,struct options *options,
         switch(c)
         {
             case 'c':
-                options->cgi = true;
                 server_info->cgi_dir = optarg;
                 break;
             case 'd':
-                options->debug = true;
+                server_info->debug = true;
                 break;
             case 'h':
-                options->help = true;
                 usage();
                 return 1;
             case 'i':
-                options->bind_to = true;
                 host_name = optarg;
                 assert_valid_address(host_name);
                 server_info->address = host_name;
                 break;
             case 'l':
-                options->log = true;
                 server_info->logdir = optarg;
+                server_info->debug = false;
                 break;
             case 'p':
-                options->port = true;
                 assert_valid_port(optarg);
                 server_info->port = optarg;
                 break;

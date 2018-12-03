@@ -118,7 +118,7 @@ listing(int fd, char *target, struct http_request *req, response *resp)
         err(1, "opendir"); // TODO send response to client instead
 
     if ((resp->content = calloc(size, 1)) == NULL) {
-        internal_error(fd);
+        internal_error(fd, req);
         err(1, "calloc");
     }
 
@@ -145,12 +145,12 @@ listing(int fd, char *target, struct http_request *req, response *resp)
 
         tp = gmtime(&st.st_mtime);
         if (tp == NULL) {
-            internal_error(fd);
+            internal_error(fd, req);
             err(1, "gmtime");
         }
 
         if (strftime(tbuf, sizeof(buf), "%Y-%m-%d %H:%M", tp) == 0) {
-            internal_error(fd);
+            internal_error(fd, req);
             err(1, "strftime");
         }
 
