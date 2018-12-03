@@ -11,6 +11,7 @@
 #include <limits.h>
 #include <netdb.h>
 #include <poll.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -135,6 +136,12 @@ init_settings(){
     server_info.debug = true;
 }
 
+void sigchld() {
+    int res;
+    if (wait(&res) == -1)
+        perror("wait");
+}
+
 int 
 main(int argc,char **argv) {
     struct sockaddr_in6 client; // assuming sockaddr_in6 is bigger than sockaddr_in
@@ -145,6 +152,8 @@ main(int argc,char **argv) {
     char *host, *port, *ipport, *dir;
     struct pollfd *fds;
     struct stat dir_st;
+
+    signal(SIGCHLD, sigchld);
 
     init_settings();
     if (parse_args(argc, argv, &server_info))
@@ -222,7 +231,7 @@ main(int argc,char **argv) {
 #pragma clang diagnostic pop
             err(1, "daemon");
 
-    while ((status = poll(fds, nsocks, -1)) > 0) {
+    while ((status = poll(fds, nsocks, -1)) > 0 || errno == EINTR) {
         for (i = 0; i < nsocks; ++i) {
             if (!fds[i].revents)
                 continue;
@@ -240,8 +249,8 @@ main(int argc,char **argv) {
                     break;
 
                 case 0: // child
-                    http(clientsock, dir,
-                         (struct sockaddr*)&client, clientsz);
+                    http(clientsock, dir, (struct sockaddr*)&client, clientsz);
+                    return 0;
                     break;
 
                 default: // parent
