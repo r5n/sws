@@ -1,0 +1,38 @@
+			   sws(1) Checklist
+			   ----------------
+
+1. Did I write all the code myself?
+	Yes.
+
+2. Does my code follow the style guide?
+	Yes.
+
+3. Does my code compile without warnings or errors on a NetBDS 8.x
+   system?
+	Yes.
+
+4. Did I provide a Makefile?
+	Yes.
+
+5. Did I provide a README to explain any problems or issues I have
+   encountered?
+	Yes.
+
+6. Did I check the return value of all function calls?
+	Yes.
+
+7. Did I send error messages to stderr?
+	Yes.
+
+8. Did I use only meaningful and necessary comments?
+       Yes.
+
+9. Does my program return zero on success, non-zero otherwise?
+   	Yes.
+
+10. Did I make sure that my .h files only include function forward
+    declarations, macros, etc., no function implementations or other
+    code?
+    Yes.
+
+
