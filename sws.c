@@ -41,15 +41,22 @@ logging(struct http_request *req, char *line, response *resp)
         time_t now;
         char time_line[BUFSIZ];
         char buf[BUFSIZ];
-        const char *ip;
+        char ip[MAX(INET_ADDRSTRLEN, INET6_ADDRSTRLEN)] = {0};
         struct tm *time_struct;
 
         if (time(&now) == -1)
                 err(1, "time");
         time_struct = gmtime(&now);
 
-        if ((ip = inet_ntop(req->addr->sa_family, req->addr, buf, req->addrlen)) == NULL)
-            err(1, "inet_pton");
+        if (req->addr->sa_family == AF_INET) {
+            if (inet_ntop(AF_INET, &((struct sockaddr_in*)req->addr)->sin_addr,
+                          ip, sizeof ip) == NULL)
+                err(1, "inet_pton");
+        } else {
+            if (inet_ntop(AF_INET6, &((struct sockaddr_in6*)req->addr)->sin6_addr,
+                          ip, sizeof ip) == NULL)
+                err(1, "inet_pton");
+        }
 
         if(strftime(time_line,BUFSIZ,"%d/%b/%Y:%T:%z",time_struct) == 0){
                 err(1,"Log time formatting");
