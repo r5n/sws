@@ -121,14 +121,12 @@ listing(int fd, char *target, struct http_request *req, struct http_response *re
     mod = req->time;
     if (req->if_modified == 1) {
 	tmod = mktime(mod);
-	printf("!got time: %s\n", ctime(&tmod));
     }
 
     fav = strstr(target, "favicon.ico");
     if (fav != NULL) { /* request from browser */
 	*fav = '\0';
 	path = strdup(target);
-	printf("path: %s\n", path);
     }
 
     if ((dp = opendir(path)) == NULL)
@@ -155,9 +153,7 @@ listing(int fd, char *target, struct http_request *req, struct http_response *re
 	    err(1, "stat");
 
 	if (req->if_modified == 1) {
-	    printf("running a time check\n");
 	    if (difftime(st.st_mtime, tmod) < 0) {
-		printf("have to continue\n");
 		continue;
 	    }
 	}
