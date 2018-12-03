@@ -41,6 +41,8 @@ int parse_request(int, struct http_request *);
 int parse_args(int, char **,struct options *,struct server_info *);
 void write_bad_request(int);
 void cgi(int, char *);
-void handle_request(int, struct server_info *, struct http_request *);
+void handle_request(int, struct options *,
+		    struct server_info *, struct http_request *);
+void listing(int, char *, struct tm *);
 
 #endif // ifndef _EXTERN_H_

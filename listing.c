@@ -9,6 +9,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "extern.h"
+
 #define FTS_OPTIONS   FTS_PHYSICAL | FTS_NOCHDIR | FTS_SEEDOT
 #define HUMANIZE_LEN  5
 #define STRTIME_FMT   "%Y-%m-%d %H:%M "
@@ -49,7 +51,7 @@ listing(int fd, char *path, struct tm *mod)
     dir[0] = path;
     dir[1] = NULL;
     maxnl = maxsz = 0;
-    
+
     if (mod != NULL)
 	tmod = mktime(mod);
 

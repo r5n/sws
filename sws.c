@@ -45,7 +45,6 @@ logging(struct options *options,struct server_info *server_info,char *ipport,cha
         }
 
         if((logfd = open(server_info->logdir,O_WRONLY | O_APPEND | O_CREAT,0666)) == -1){
-	    return;
                 err(1,"could not open log file");
         }
 
@@ -104,8 +103,9 @@ void http(struct options *options,struct server_info * server_info,int fd,char *
                 printf(" since: %s\n", asctime(req.time));
         else
                 printf("\n");
-        logging(options,server_info,ipport,reqstring);
-	handle_request(fd, server_info, &req);
+        // logging(options,server_info,ipport,reqstring);
+	printf("ipport: %s\n", ipport); // unused warning REMOVE
+	handle_request(fd, options, server_info, &req);
 }
 
 char *sockaddr_to_str(struct sockaddr *addr, socklen_t addrlen) {

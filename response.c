@@ -89,15 +89,14 @@ write_bad_request(int fd)
 }
 
 void
-handle_request(int client, struct server_info *info,
-	       struct http_request *req)
+handle_request(int client, struct options *opt,
+	       struct server_info *info, struct http_request *req)
 {
     char *uri, *path;
 
-    printf("ran\n");
-
     uri = req->uri;
-    if ((strncmp(uri, CGI_BIN, 8)) == 0) {
+
+    if (((strncmp(uri, CGI_BIN, 8)) == 0) && opt->cgi) {
 	uri += 8;
 
 	if ((path = malloc(PATH_MAX)) == NULL)
@@ -106,7 +105,24 @@ handle_request(int client, struct server_info *info,
 	path = strdup(info->cgi_dir);
 
 	(void)strncat(path, uri, PATH_MAX - strlen(path) - 1);
-	printf("path : %s\n", path);
+	printf("cgi path : %s\n", path);
+	/* TODO send response headers */
 	cgi(client, path);
+	return;
     }
+
+    /* TODO Check that uri is a regular file or a directory
+     * that contains 'index.html'.  Might be efficient to call
+     * fts_open(3) here and then reuse the result in `listing' */
+
+    /* Need to list out the directory at this point */
+    if ((path = malloc(PATH_MAX)) == NULL)
+	err(1, "malloc");
+    path = strdup(info->dir);
+    (void)strncat(path, uri, PATH_MAX - strlen(path) - 1);
+
+    /* call realpath(3)? */
+
+    listing(client, path, req->time);
+    free(path);
 }
