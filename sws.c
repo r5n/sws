@@ -215,6 +215,13 @@ main(int argc,char **argv) {
 
     freeaddrinfo(res);
 
+    if (!server_info.debug)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated" // daemon(5) is deprecated on macOS
+        if (daemon(0, 0) != 0)
+#pragma clang diagnostic pop
+            err(1, "daemon");
+
     while ((status = poll(fds, nsocks, -1)) > 0) {
         for (i = 0; i < nsocks; ++i) {
             if (!fds[i].revents)

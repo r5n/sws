@@ -1,4 +1,4 @@
-CFLAGS += -Wall -Werror -Wextra -pedantic -std=c99  -g
+CFLAGS += -Wall -Werror -Wextra -Wno-unknown-pragmas -pedantic -std=c99  -g
 LDLIBS = -lm
 
 sws: args.o sws.o parse.o response.o listing.o cgi.o

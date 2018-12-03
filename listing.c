@@ -123,7 +123,7 @@ listing(int fd, char *target, struct http_request *req, response *resp)
     char *path;
 
     size = BUFSIZ;
-    len = 0;
+    len = tmod = 0;
     path = target;
 
     mod = req->time;
@@ -153,7 +153,7 @@ listing(int fd, char *target, struct http_request *req, response *resp)
         if ((stat(fpath, &st)) == -1)
             err(1, "stat");
 
-        if (req->if_modified == 1) {
+        if (req->if_modified) {
             if (difftime(st.st_mtime, tmod) < 0) {
                 continue;
             }

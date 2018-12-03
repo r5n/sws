@@ -155,7 +155,7 @@ handle_request(int client, struct server_info *info,
 
     real = realpath(full, NULL);
     if (!real) {
-        if (errno == ENOENT) {
+        if (errno == ENOENT || errno == ENOTDIR) {
             // security vulnerability - leaks the existence of files
             respond(client, req, &(response){
                 .last_modified = NULL,
