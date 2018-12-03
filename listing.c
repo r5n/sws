@@ -72,16 +72,16 @@ html_footer(char **buf, size_t *bufsz, size_t *buflen)
 /* change for NetBSD --> int sz to char *sz */
 void
 write_entry(char **buf, size_t *bufsz, size_t *buflen,
-        char *name, char *tm, int sz)
+        char *name, char *tm, int sz, bool isdir)
 {
     int n;
     char tmp[BUFSIZ];
 
     n = snprintf(tmp, BUFSIZ,
                  "<tr>\n"
-                 "<td><a href=\"/%s\">%s</a></td><td>%s</td><td>%d</td>\n"
+                 "<td><a href=\"%s%s\">%s%s</a></td><td>%s</td><td>%d</td>\n"
                  "</tr>\n",
-                 name, name, tm, sz);
+                 name, isdir ? "/" : "", name, isdir ? "/" : "", tm, sz);
     if (n < 0)
         err(1, "snprintf");
 
@@ -164,7 +164,7 @@ listing(int fd, char *target, struct http_request *req, response *resp)
     #endif
 
         write_entry(&resp->content, &size, &len, dirp->d_name,
-                tbuf, (int)st.st_size);
+                tbuf, (int)st.st_size, S_ISDIR(st.st_mode));
     }
     
     html_footer(&resp->content, &size, &len);
