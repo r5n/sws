@@ -164,7 +164,7 @@ handle_request(int client, struct options *opt,
     }
 
     if (S_ISDIR(st.st_mode)) {
-        listing(client, real, req->time, &resp);
+        listing(client, real, req, &resp);
     } else if ((file = open(real, O_RDONLY)) < 0) {
         char buf[BUFSIZ], tmbuf[BUFSIZ], lmbuf[BUFSIZ];
         ssize_t rd;

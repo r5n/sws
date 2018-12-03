@@ -103,7 +103,7 @@ write_entry(char **buf, size_t *bufsz, size_t *buflen,
 }
 
 void
-listing(int fd, char *target, struct http_request *req, struct http_response *resp)
+listing(int fd, char *target, struct http_request *req, response *resp)
 {
     DIR *dp;
     struct dirent *dirp;
@@ -187,7 +187,6 @@ listing(int fd, char *target, struct http_request *req, struct http_response *re
     if (fav != NULL)
 	free(path);  // free strdup call
 
-    resp->content_length = len;
     resp->content_type = "text/html";
     resp->code = 200;
     resp->last_modified = NULL;
