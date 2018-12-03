@@ -3,7 +3,6 @@
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
-#include <fts.h>
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
@@ -14,27 +13,15 @@
 
 #include "extern.h"
 
-#define FTS_OPTIONS   FTS_PHYSICAL | FTS_NOCHDIR | FTS_SEEDOT
 #define HUMANIZE_LEN  5
 #define STRTIME_FMT   "%Y-%m-%d %H:%M "
 #define STRTIME_LEN   17
-#define ENT_FORMAT    "<tr>\n<td>%s</td><td>%s</td><td>%d</td>\n</tr>\n"
-
-void write_entries(int, FTSENT *);
 
 int
 num_len(off_t n)
 {
     if (n <= 0) return 1;
     return (int)floor(log10((float)n)) + 1;
-}
-
-int
-cmpfn(const FTSENT **ent1, const FTSENT **ent2)
-{
-    short len;
-    len = (*ent1)->fts_namelen;
-    return strncmp((*ent1)->fts_name, (*ent2)->fts_name, len);
 }
 
 void
@@ -51,12 +38,12 @@ html_header(char **buf, size_t *bufsz, size_t *buflen, char *path)
          "<td><b>Size</b></td>",
          path, path);
     if (n < 0)
-    err(1, "snprintf");
+        err(1, "snprintf");
 
     while (n >= (int)(*bufsz - *buflen)) {
-    *bufsz *= 2;
-    if ((*buf = realloc(*buf, *bufsz)) == NULL)
-        err(1, "realloc");
+        *bufsz *= 2;
+        if ((*buf = realloc(*buf, *bufsz)) == NULL)
+            err(1, "realloc");
     }
     (void)strncpy(*buf+(*buflen), tmp, n);
     *buflen += n;
@@ -73,9 +60,9 @@ html_footer(char **buf, size_t *bufsz, size_t *buflen)
     err(1, "snprintf");
 
     while (n >= (int)(*bufsz - *buflen)) {
-    *bufsz *= 2;
-    if ((*buf = realloc(*buf, *bufsz)) == NULL)
-        err(1, "realloc");
+        *bufsz *= 2;
+        if ((*buf = realloc(*buf, *bufsz)) == NULL)
+            err(1, "realloc");
     }
     (void)strncpy(*buf+(*buflen), tmp, n);
     *buflen += n;
@@ -89,14 +76,18 @@ write_entry(char **buf, size_t *bufsz, size_t *buflen,
     int n;
     char tmp[BUFSIZ];
 
-    n = snprintf(tmp, BUFSIZ, ENT_FORMAT, name, tm, sz);
+    n = snprintf(tmp, BUFSIZ,
+                 "<tr>\n"
+                 "<td><a href=\"/%s\">%s</a></td><td>%s</td><td>%d</td>\n"
+                 "</tr>\n",
+                 name, name, tm, sz);
     if (n < 0)
-    err(1, "snprintf");
-    
+        err(1, "snprintf");
+
     while (n >= (int)(*bufsz - *buflen)) {
-    *bufsz *= 2;
-    if ((*buf = realloc(*buf, *bufsz)) == NULL)
-        err(1, "realloc");
+        *bufsz *= 2;
+        if ((*buf = realloc(*buf, *bufsz)) == NULL)
+            err(1, "realloc");
     }
     (void)strncpy(*buf+(*buflen), tmp, n); // don't copy '\0'
     *buflen += n;
@@ -112,80 +103,70 @@ listing(int fd, char *target, struct http_request *req, response *resp)
     char buf[PATH_MAX + 1], fpath[PATH_MAX + 1], tbuf[STRTIME_LEN];
     struct stat st;
     size_t size, len;
-    char *fav, *path;
+    char *path;
 
     size = BUFSIZ;
     len = 0;
     path = target;
 
     mod = req->time;
-    if (req->if_modified == 1) {
-	tmod = mktime(mod);
-    }
-
-    fav = strstr(target, "favicon.ico");
-    if (fav != NULL) { /* request from browser */
-	*fav = '\0';
-	path = strdup(target);
-    }
+    if (req->if_modified)
+        tmod = mktime(mod);
 
     if ((dp = opendir(path)) == NULL)
-	err(1, "opendir"); // TODO send response to client instead
+        err(1, "opendir"); // TODO send response to client instead
 
     if ((resp->content = calloc(size, 1)) == NULL) {
-	internal_error(fd);
-	err(1, "calloc");
+        internal_error(fd);
+        err(1, "calloc");
     }
 
-    html_header(&resp->content, &size, &len, path);
+    html_header(&resp->content, &size, &len, req->uri);
 
     for (;;) {
-	if ((dirp = readdir(dp)) == NULL)
-	    break;
+        if ((dirp = readdir(dp)) == NULL)
+            break;
 
-	if (strncmp(dirp->d_name, ".", 1) == 0)
-	    continue;
+        if (strncmp(dirp->d_name, ".", 1) == 0)
+            continue;
 
-	(void)snprintf(buf, PATH_MAX, "%s/%s", path, dirp->d_name);
-	(void)realpath(buf, fpath);
+        (void)snprintf(buf, PATH_MAX, "%s/%s", path, dirp->d_name);
+        (void)realpath(buf, fpath);
 
-	if ((stat(fpath, &st)) == -1)
-	    err(1, "stat");
+        if ((stat(fpath, &st)) == -1)
+            err(1, "stat");
 
-	if (req->if_modified == 1) {
-	    if (difftime(st.st_mtime, tmod) < 0) {
-		continue;
-	    }
-	}
+        if (req->if_modified == 1) {
+            if (difftime(st.st_mtime, tmod) < 0) {
+                continue;
+            }
+        }
 
-	tp = gmtime(&st.st_mtime);
-	if (tp == NULL) {
-	    internal_error(fd);
-	    err(1, "gmtime");
-	}
+        tp = gmtime(&st.st_mtime);
+        if (tp == NULL) {
+            internal_error(fd);
+            err(1, "gmtime");
+        }
 
-	if (strftime(tbuf, sizeof(buf), "%Y-%m-%d %H:%M", tp) == 0) {
-	    internal_error(fd);
-	    err(1, "strftime");
-	}
+        if (strftime(tbuf, sizeof(buf), "%Y-%m-%d %H:%M", tp) == 0) {
+            internal_error(fd);
+            err(1, "strftime");
+        }
 
-#if 0
-	if ((humanize_number(bufh, HUMANIZE_LEN, (int64_t)st.st_size,
-			    suffix, HN_AUTOSCALE,
-			     HN_DECIMAL | HN_NOSPACE | HN_B)) == -1) {
-	    internal_error(fd);
-	    err(1, "humanize_number");
-	}
-#endif
+    #if 0
+        if ((humanize_number(bufh, HUMANIZE_LEN, (int64_t)st.st_size,
+                    suffix, HN_AUTOSCALE,
+                    HN_DECIMAL | HN_NOSPACE | HN_B)) == -1) {
+            internal_error(fd);
+            err(1, "humanize_number");
+        }
+    #endif
 
-	write_entry(&resp->content, &size, &len, dirp->d_name,
-		    tbuf, (int)st.st_size);
+        write_entry(&resp->content, &size, &len, dirp->d_name,
+                tbuf, (int)st.st_size);
     }
     
     html_footer(&resp->content, &size, &len);
-
-    if (fav != NULL)
-	free(path);  // free strdup call
 
     resp->content_type = "text/html";
     resp->code = 200;
